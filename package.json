@@ -1,0 +1,13 @@
+{
+  "name": "cobros-barberia",
+  "version": "1.0.0",
+  "description": "Sistema de cobros para barberías con Google Apps Script y Google Sheets",
+  "private": true,
+  "scripts": {
+    "test": "node test/test.js",
+    "demo": "node -e \"require('fs').copyFileSync('src/index.html','docs/index.html')\"",
+    "push": "clasp push"
+  },
+  "author": "Tahiel Cassata",
+  "license": "UNLICENSED"
+}

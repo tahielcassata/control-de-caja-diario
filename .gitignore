@@ -1,0 +1,14 @@
+# clasp: cada cliente tiene su propio proyecto de Apps Script
+.clasp.json
+.clasprc.json
+
+# Node
+node_modules/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Nunca subir datos reales de cobros
+*.xlsx
+*.csv

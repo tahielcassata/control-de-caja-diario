@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Cobros</title>
+<style>
+  :root {
+    --oscuro: #1C1B19;
+    --oscuro-2: #2A2926;
+    --fondo: #F6F3EE;
+    --fondo-2: #EDE7DC;
+    --tarjeta: #FFFDF9;
+    --borde: #E4DED3;
+    --borde-2: #CFC7B8;
+    --texto: #1C1B19;
+    --texto-2: #4A4640;
+    --texto-3: #6B655B;
+    --acento: #B8862F;
+    --acento-osc: #8A5A12;
+    --acento-fondo: #F3E3C2;
+    --acento-texto: #4A3208;
+    --ok: #2F6B3A;
+    --ok-fondo: #E3F0E3;
+    --error: #A3352D;
+    --error-fondo: #F8E3E0;
+    --aviso: #7A5410;
+    --aviso-fondo: #FBEFD6;
+    --radio: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--fondo);
+    color: var(--texto);
+    font-size: 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  input, select { font: inherit; color: inherit; }
+
+  .app { max-width: 1280px; margin: 0 auto; padding: 16px; }
+  .barra { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .barra h1 { font-size: 22px; margin: 0; font-weight: 600; }
+  .barra .sub { font-size: 14px; color: var(--texto-3); margin-top: 2px; }
+  .iconos { display: flex; gap: 4px; }
+  .icono { width: 40px; height: 40px; border: none; background: transparent; border-radius: 10px; color: #9A9489; display: grid; place-items: center; }
+  .icono:hover { background: var(--fondo-2); color: var(--texto-2); }
+  .icono svg { width: 22px; height: 22px; }
+  .volver { border: 1px solid var(--borde-2); background: var(--tarjeta); border-radius: 10px; padding: 8px 14px; font-size: 15px; }
+
+  .grilla { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  @media (min-width: 900px) { .grilla { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; } .lado { position: sticky; top: 16px; } }
+
+  .tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; padding: 18px; }
+  .etiqueta { font-size: 14px; color: var(--texto-3); margin: 18px 0 8px; }
+  .etiqueta:first-child { margin-top: 0; }
+
+  .opciones { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (min-width: 600px) { .opciones.puestos { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (min-width: 1100px) { .opciones.puestos { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+  .opciones.dos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .op { min-height: 56px; border: 1px solid var(--borde); background: #F1ECE3; border-radius: 10px; padding: 8px; text-align: center; line-height: 1.2; }
+  .op small { display: block; font-size: 13px; color: var(--texto-3); margin-top: 2px; }
+  .op.puesto { font-size: 20px; font-weight: 600; }
+  .op.puesto small { font-weight: 400; margin: 0 0 2px; }
+  .op.on { background: var(--acento-fondo); border: 2px solid var(--acento); color: var(--acento-texto); }
+  .op.on small { color: var(--acento-osc); }
+  .op:active { transform: scale(0.98); }
+
+  .campo { width: 100%; height: 52px; border: 1px solid var(--borde-2); border-radius: 10px; padding: 0 14px; background: #fff; font-size: 18px; }
+  .campo:focus { outline: 2px solid var(--acento); outline-offset: 1px; }
+
+  .msg { min-height: 22px; font-size: 15px; margin: 14px 0 6px; }
+  .msg.error { color: var(--error); }
+  .msg.ok { color: var(--ok); }
+  .msg.aviso { color: var(--aviso); }
+
+  .btn { width: 100%; min-height: 56px; border-radius: 12px; font-size: 18px; font-weight: 600; border: none; }
+  .btn.prim { background: var(--oscuro); color: var(--fondo); }
+  .btn.sec { background: transparent; border: 1px solid var(--borde-2); color: var(--texto-2); font-weight: 500; font-size: 16px; min-height: 48px; margin-top: 10px; }
+  .btn:disabled { opacity: 0.55; cursor: default; }
+
+  .metricas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .metrica { background: #F1ECE3; border-radius: 12px; padding: 12px 14px; }
+  .metrica .k { font-size: 13px; color: var(--texto-3); }
+  .metrica .v { font-size: 24px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .metrica.acento { background: var(--acento-fondo); }
+  .metrica.acento .k { color: var(--acento-osc); }
+  .metrica.acento .v { color: var(--acento-texto); }
+
+  .lista { margin: 0; padding: 0; list-style: none; }
+  .lista li { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--borde); font-size: 15px; }
+  .lista li:first-child { border-top: none; }
+  .lista .vacia { color: var(--texto-3); }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .gris { color: var(--texto-3); }
+
+  .banner { border-radius: 12px; padding: 14px 16px; font-size: 15px; line-height: 1.45; }
+  .banner.aviso { background: var(--aviso-fondo); color: var(--aviso); }
+  .banner.ok { background: var(--ok-fondo); color: var(--ok); }
+  .banner.demo { background: var(--oscuro-2); color: #E7E2D9; margin-bottom: 16px; }
+
+  .nav-fecha { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+  .nav-fecha button { width: 48px; height: 48px; border-radius: 10px; border: 1px solid var(--borde-2); background: var(--tarjeta); font-size: 20px; }
+  .nav-fecha .f { text-align: center; }
+  .nav-fecha .f b { display: block; font-size: 18px; }
+  .estado { display: inline-block; font-size: 13px; padding: 3px 10px; border-radius: 999px; margin-top: 4px; }
+  .estado.cerrado { background: var(--ok-fondo); color: var(--ok); }
+  .estado.abierto { background: var(--aviso-fondo); color: var(--aviso); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th { text-align: left; font-weight: 500; color: var(--texto-3); font-size: 13px; padding: 8px 6px; border-bottom: 1px solid var(--borde); }
+  td { padding: 10px 6px; border-bottom: 1px solid var(--borde); }
+  th.d, td.d { text-align: right; }
+  td.acento { color: var(--acento-osc); font-weight: 600; }
+
+  .seccion { margin-top: 16px; }
+  .seccion h2 { font-size: 18px; margin: 0 0 4px; font-weight: 600; }
+  .seccion p.ayuda { margin: 0 0 12px; color: var(--texto-3); font-size: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: flex; align-items: center; gap: 8px; border: 1px solid var(--borde); background: #F1ECE3; border-radius: 10px; padding: 8px 10px 8px 14px; font-size: 15px; }
+  .chip.off { opacity: 0.6; }
+  .switch { position: relative; width: 44px; height: 26px; border-radius: 999px; border: none; background: var(--borde-2); padding: 0; flex: none; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left 0.15s; }
+  .switch.on { background: var(--acento); }
+  .switch.on::after { left: 21px; }
+  .fila-serv { display: grid; grid-template-columns: minmax(0, 1fr) 130px 44px 96px; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--borde); }
+  .fila-serv:first-of-type { border-top: none; }
+  .fila-serv .campo { height: 44px; font-size: 16px; }
+  .fila-serv .btn { min-height: 44px; font-size: 15px; margin: 0; }
+  @media (max-width: 560px) { .fila-serv { grid-template-columns: minmax(0, 1fr) 110px; } .fila-serv .switch { justify-self: start; } }
+  .linea { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .linea .campo { width: auto; flex: 1; min-width: 120px; height: 48px; }
+  .linea .btn { width: auto; padding: 0 20px; min-height: 48px; font-size: 16px; margin: 0; }
+
+  .capa { position: fixed; inset: 0; background: rgba(28, 27, 25, 0.5); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+  .modal { background: var(--tarjeta); border-radius: 16px; padding: 20px; width: 100%; max-width: 420px; }
+  .modal h3 { margin: 0 0 6px; font-size: 18px; }
+  .modal p { margin: 0 0 14px; color: var(--texto-2); font-size: 15px; line-height: 1.45; }
+  .modal .acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .modal .acciones .btn { min-height: 48px; font-size: 16px; margin: 0; }
+
+  .cargando { padding: 48px 0; text-align: center; color: var(--texto-3); }
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app" id="app"><div class="cargando">Cargando…</div></div>
+<div id="capa"></div>
+
+<script>
+/* ═════════════════════ Conexión con el servidor ═════════════════════
+ * Dentro de Apps Script usa google.script.run.
+ * Abierto como archivo suelto (GitHub Pages, navegador) usa un modo demo
+ * con datos de ejemplo en memoria, para mostrar el sistema sin instalarlo.
+ */
+var MODO_DEMO = !(window.google && google.script && google.script.run);
+
+function api(fn) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  if (MODO_DEMO) {
+    return new Promise(function (ok, mal) {
+      setTimeout(function () {
+        try { ok(JSON.parse(JSON.stringify(Demo[fn].apply(null, args)))); }
+        catch (e) { mal(e); }
+      }, 120);
+    });
+  }
+  return new Promise(function (ok, mal) {
+    google.script.run.withSuccessHandler(ok).withFailureHandler(mal)[fn].apply(null, args);
+  });
+}
+
+/* ═════════════════════ Estado de la pantalla ═════════════════════ */
+var S = {
+  vista: 'cobro',
+  estado: null,
+  sel: { puesto: null, servicio: null, medio: null, medioPropina: null },
+  msg: null,
+  ocupado: false,
+  cierre: null,
+  fechaCierre: null,
+  pin: null,
+  admin: null
+};
+
+var MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+var DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function plata(n) { return '$' + Math.round(Number(n) || 0).toLocaleString('es-AR'); }
+function fechaLarga(f) {
+  var p = f.split('-').map(Number);
+  var d = new Date(p[0], p[1] - 1, p[2]);
+  var t = DIAS[d.getDay()] + ' ' + p[2] + ' de ' + MESES[p[1] - 1];
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function sumarDias(f, n) {
+  var p = f.split('-').map(Number);
+  var d = new Date(p[0], p[1] - 1, p[2] + n);
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+function errorTexto(e) { return (e && e.message ? e.message : String(e)).replace(/^Error:\s*/, ''); }
+
+var ICONO_PLANILLA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/></svg>';
+var ICONO_AJUSTES = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
+
+/* ═════════════════════ Arranque ═════════════════════ */
+function iniciar() {
+  cargarEstado();
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && S.vista === 'cobro' && !S.ocupado) cargarEstado(true);
+  });
+}
+
+function cargarEstado(silencioso) {
+  return api('getEstado').then(function (e) {
+    var cambioDia = S.estado && S.estado.hoy !== e.hoy;
+    S.estado = e;
+    if (cambioDia) limpiarSeleccion(true);
+    if (S.vista === 'cobro') render();
+  }).catch(function (e) {
+    if (!silencioso) $('app').innerHTML = '<div class="cargando">No se pudo cargar: ' + esc(errorTexto(e)) + '<br><br><button class="volver" onclick="cargarEstado()">Reintentar</button></div>';
+  });
+}
+
+function render() {
+  if (S.vista === 'cobro') renderCobro();
+  else if (S.vista === 'cierre') renderCierre();
+  else if (S.vista === 'admin') renderAdmin();
+}
+
+function ir(vista) {
+  S.vista = vista;
+  window.scrollTo(0, 0);
+  if (vista === 'cobro') { S.msg = null; if (S.estado) render(); cargarEstado(true); }
+  if (vista === 'cierre') { S.fechaCierre = S.estado ? S.estado.hoy : null; cargarCierre(); }
+  if (vista === 'admin') { S.admin = null; render(); }
+}
+
+function bannerDemo() {
+  return MODO_DEMO ? '<div class="banner demo">Modo demostración: los datos son de ejemplo y no se guardan. PIN de administración: 1234.</div>' : '';
+}
+
+/* ═════════════════════ Pantalla de cobro ═════════════════════ */
+function renderCobro() {
+  var e = S.estado, s = S.sel, r = e.resumen;
+  var h = bannerDemo();
+  h += '<div class="barra"><div><h1>Cobros de hoy</h1><div class="sub">' + esc(fechaLarga(e.hoy)) + '</div></div>' +
+       '<div class="iconos">' +
+       '<button class="icono" onclick="abrirPlanilla()" aria-label="Abrir planilla" title="Planilla">' + ICONO_PLANILLA + '</button>' +
+       '<button class="icono" onclick="ir(\'admin\')" aria-label="Administración" title="Administración">' + ICONO_AJUSTES + '</button>' +
+       '</div></div>';
+
+  h += '<div class="grilla"><div class="tarjeta">';
+  if (e.cerrado) {
+    h += '<div class="banner aviso"><b>El día está cerrado.</b><br>Si quedó un cobro sin cargar, entrá a «Cierre del día» y reabrilo con el PIN.</div>';
+  } else {
+    h += '<div class="etiqueta">Puesto de trabajo</div><div class="opciones puestos">';
+    e.puestos.forEach(function (n) {
+      h += '<button class="op puesto' + (s.puesto === n ? ' on' : '') + '" onclick="elegir(\'puesto\',' + n + ')"><small>Puesto</small>' + n + '</button>';
+    });
+    if (!e.puestos.length) h += '<div class="gris">No hay puestos activos. Agregalos desde Administración.</div>';
+    h += '</div>';
+
+    h += '<div class="etiqueta">Servicio</div><div class="opciones">';
+    e.servicios.forEach(function (sv, i) {
+      h += '<button class="op' + (s.servicio === sv.nombre ? ' on' : '') + '" onclick="elegirServicio(' + i + ')">' + esc(sv.nombre) + '<small>' + plata(sv.precio) + '</small></button>';
+    });
+    if (!e.servicios.length) h += '<div class="gris">No hay servicios activos. Agregalos desde Administración.</div>';
+    h += '</div>';
+
+    h += '<div class="etiqueta">Monto</div><input id="monto" class="campo" type="number" inputmode="numeric" min="0" step="1" placeholder="Elegí un servicio" oninput="limpiarMsg()">';
+
+    h += '<div class="etiqueta">Medio de pago</div><div class="opciones dos">' +
+         botonMedio('medio', 'Efectivo') + botonMedio('medio', 'Transferencia') + '</div>';
+
+    h += '<div class="etiqueta">Propina (opcional)</div><input id="propina" class="campo" type="number" inputmode="numeric" min="0" step="1" placeholder="Sin propina" oninput="cambioPropina()">';
+    h += '<div id="medioPropina" class="opciones dos oculto" style="margin-top:8px">' +
+         botonMedio('medioPropina', 'Efectivo') + botonMedio('medioPropina', 'Transferencia') + '</div>';
+
+    h += '<div id="msg" class="msg"></div>';
+    h += '<button id="guardar" class="btn prim" onclick="guardar()"' + (S.ocupado ? ' disabled' : '') + '>Guardar cobro</button>';
+    h += '<button class="btn sec" onclick="deshacer()"' + (S.ocupado ? ' disabled' : '') + '>Deshacer último</button>';
+  }
+  h += '</div>';
+
+  h += '<div class="lado"><div class="tarjeta"><div class="metricas">' +
+       metrica('Efectivo', r.efectivo) + metrica('Transferencias', r.transferencias) +
+       metrica('Total del día', r.total) + metrica('Propinas a entregar', r.propinas, true) +
+       '</div>';
+  h += '<div class="etiqueta">Últimos cobros</div><ul class="lista">';
+  if (!e.ultimos.length) h += '<li class="vacia">Todavía no hay cobros hoy.</li>';
+  e.ultimos.forEach(function (c) {
+    h += '<li><span>' + esc(c.hora) + ' · Puesto ' + c.puesto + ' · ' + esc(c.servicio) + '</span><span class="num">' + plata(c.monto) + (c.propina ? ' <span class="gris">+ ' + plata(c.propina) + '</span>' : '') + '</span></li>';
+  });
+  h += '</ul>';
+  h += '<button class="btn sec" onclick="ir(\'cierre\')">Cierre del día</button></div></div></div>';
+
+  // conservar lo tipeado al redibujar
+  var monto = $('monto') ? $('monto').value : null;
+  var propina = $('propina') ? $('propina').value : null;
+  $('app').innerHTML = h;
+  if (!e.cerrado) {
+    if (monto !== null) $('monto').value = monto;
+    if (propina !== null) $('propina').value = propina;
+    mostrarMedioPropina();
+    pintarMsg();
+  }
+}
+
+function botonMedio(campo, valor) {
+  return '<button class="op' + (S.sel[campo] === valor ? ' on' : '') + '" onclick="elegir(\'' + campo + '\',\'' + valor + '\')">' + valor + '</button>';
+}
+function metrica(k, v, acento) {
+  return '<div class="metrica' + (acento ? ' acento' : '') + '"><div class="k">' + k + '</div><div class="v">' + plata(v) + '</div></div>';
+}
+
+function elegir(campo, valor) { S.sel[campo] = valor; S.msg = null; renderCobro(); }
+function elegirServicio(i) {
+  var sv = S.estado.servicios[i];
+  S.sel.servicio = sv.nombre;
+  S.msg = null;
+  renderCobro();
+  $('monto').value = sv.precio;
+}
+function cambioPropina() { limpiarMsg(); mostrarMedioPropina(); }
+function mostrarMedioPropina() {
+  var p = Number($('propina').value) || 0;
+  $('medioPropina').classList.toggle('oculto', p <= 0);
+}
+function limpiarMsg() { S.msg = null; pintarMsg(); }
+function pintarMsg() {
+  var el = $('msg'); if (!el) return;
+  el.className = 'msg' + (S.msg ? ' ' + S.msg.tipo : '');
+  el.textContent = S.msg ? S.msg.texto : '';
+}
+function avisar(tipo, texto) { S.msg = { tipo: tipo, texto: texto }; pintarMsg(); }
+
+function limpiarSeleccion(todo) {
+  S.sel = { puesto: null, servicio: null, medio: null, medioPropina: null };
+  if ($('monto')) $('monto').value = '';
+  if ($('propina')) $('propina').value = '';
+}
+
+function guardar() {
+  if (S.ocupado) return;
+  var s = S.sel;
+  var monto = Number($('monto').value);
+  var propina = Number($('propina').value) || 0;
+  if (!s.puesto) return avisar('error', 'Elegí el puesto de trabajo.');
+  if (!s.servicio) return avisar('error', 'Elegí el servicio.');
+  if (!monto || monto <= 0) return avisar('error', 'Ingresá el monto.');
+  if (!s.medio) return avisar('error', 'Elegí el medio de pago.');
+  if (propina < 0) return avisar('error', 'Revisá la propina.');
+  if (propina > 0 && !s.medioPropina) return avisar('error', 'Elegí el medio de la propina.');
+
+  var datos = { puesto: s.puesto, servicio: s.servicio, monto: monto, medio: s.medio, propina: propina, medioPropina: propina > 0 ? s.medioPropina : '' };
+  S.ocupado = true;
+  $('guardar').disabled = true;
+  $('guardar').textContent = 'Guardando…';
+  api('guardarCobro', datos).then(function (e) {
+    S.ocupado = false;
+    S.estado = e;
+    limpiarSeleccion();
+    S.msg = { tipo: 'ok', texto: 'Cobro guardado: Puesto ' + datos.puesto + ' · ' + datos.servicio + ' · ' + plata(datos.monto) };
+    renderCobro();
+  }).catch(function (err) {
+    S.ocupado = false;
+    renderCobro();
+    avisar('error', errorTexto(err));
+  });
+}
+
+function deshacer() {
+  if (S.ocupado) return;
+  if (!S.estado.ultimos.length) return avisar('error', 'No hay cobros para deshacer.');
+  var c = S.estado.ultimos[0];
+  confirmar('¿Deshacer el último cobro?', 'Se va a borrar: Puesto ' + c.puesto + ' · ' + c.servicio + ' · ' + plata(c.monto) + (c.propina ? ' + propina ' + plata(c.propina) : '') + ' (' + c.hora + ').', 'Deshacer', function () {
+    S.ocupado = true;
+    renderCobro();
+    api('deshacerUltimo').then(function (e) {
+      S.ocupado = false;
+      S.estado = e;
+      S.msg = { tipo: 'aviso', texto: 'Se deshizo: Puesto ' + e.borrado.puesto + ' · ' + e.borrado.servicio + ' · ' + plata(e.borrado.monto) + '. Cargalo de nuevo si hace falta.' };
+      renderCobro();
+    }).catch(function (err) {
+      S.ocupado = false;
+      renderCobro();
+      avisar('error', errorTexto(err));
+    });
+  });
+}
+
+function abrirPlanilla() {
+  confirmar('¿Abrir la planilla?', 'Se abre en otra pestaña. Las hojas de cobros y cierres están protegidas para que no se cambien sin querer.', 'Abrir', function () {
+    if (MODO_DEMO) return avisar('aviso', 'En el modo demostración no hay planilla real.');
+    window.open(S.estado.urlPlanilla, '_blank');
+  });
+}
+
+/* ═════════════════════ Cierre del día ═════════════════════ */
+function cargarCierre() {
+  S.cierre = null;
+  render();
+  api('getCierre', S.fechaCierre).then(function (c) {
+    if (c.fecha !== S.fechaCierre) return;
+    S.cierre = c;
+    render();
+  }).catch(function (e) {
+    $('app').innerHTML = '<div class="cargando">' + esc(errorTexto(e)) + '<br><br><button class="volver" onclick="ir(\'cobro\')">Volver</button></div>';
+  });
+}
+
+function renderCierre() {
+  var h = bannerDemo();
+  h += '<div class="barra"><div><h1>Cierre del día</h1></div><button class="volver" onclick="ir(\'cobro\')">‹ Volver a cobros</button></div>';
+  var hoy = S.estado ? S.estado.hoy : S.fechaCierre;
+  h += '<div class="tarjeta"><div class="nav-fecha">' +
+       '<button onclick="moverDia(-1)" aria-label="Día anterior">‹</button>' +
+       '<div class="f"><b>' + esc(fechaLarga(S.fechaCierre)) + '</b>' +
+       (S.cierre ? '<span class="estado ' + (S.cierre.cerrado ? 'cerrado' : 'abierto') + '">' + (S.cierre.cerrado ? 'Día cerrado' : (S.fechaCierre === hoy ? 'Día en curso' : 'Sin cerrar')) + '</span>' : '') +
+       '</div>' +
+       '<button onclick="moverDia(1)" aria-label="Día siguiente"' + (S.fechaCierre >= hoy ? ' disabled style="opacity:.4"' : '') + '>›</button></div>';
+
+  if (!S.cierre) {
+    h += '<div class="cargando">Calculando…</div></div>';
+    $('app').innerHTML = h;
+    return;
+  }
+  var r = S.cierre.resumen;
+  h += '<div class="metricas">' + metrica('Efectivo', r.efectivo) + metrica('Transferencias', r.transferencias) +
+       metrica('Total del día', r.total) + metrica('Propinas a entregar', r.propinas, true) + '</div>';
+
+  h += '<div class="etiqueta">Por puesto de trabajo</div>';
+  var filas = r.porPuesto.filter(function (p) { return p.cortes > 0; });
+  if (!filas.length) {
+    h += '<p class="gris">No hay cobros este día.</p>';
+  } else {
+    h += '<table><tr><th>Puesto</th><th class="d">Cortes</th><th class="d">Servicios</th><th class="d">Propinas</th></tr>';
+    filas.forEach(function (p) {
+      h += '<tr><td>Puesto ' + p.puesto + '</td><td class="d num">' + p.cortes + '</td><td class="d num">' + plata(p.servicios) + '</td><td class="d num acento">' + plata(p.propinas) + '</td></tr>';
+    });
+    h += '<tr><td><b>Total</b></td><td class="d num"><b>' + r.cortes + '</b></td><td class="d num"><b>' + plata(r.servicios) + '</b></td><td class="d num acento">' + plata(r.propinas) + '</td></tr></table>';
+  }
+
+  if (S.fechaCierre === hoy) {
+    h += '<div id="msg" class="msg"></div>';
+    if (S.cierre.cerrado) h += '<button class="btn sec" onclick="pedirReabrir()">Reabrir día (PIN)</button>';
+    else h += '<button class="btn prim" onclick="pedirCerrar()"' + (S.ocupado ? ' disabled' : '') + '>Cerrar día</button>';
+  }
+  h += '</div>';
+  $('app').innerHTML = h;
+}
+
+function moverDia(n) {
+  var hoy = S.estado ? S.estado.hoy : S.fechaCierre;
+  var f = sumarDias(S.fechaCierre, n);
+  if (f > hoy) return;
+  S.fechaCierre = f;
+  cargarCierre();
+}
+
+function pedirCerrar() {
+  confirmar('¿Cerrar el día?', 'Se guarda el resumen y no se pueden cargar más cobros de hoy. Mañana la pantalla arranca en cero.', 'Cerrar día', function () {
+    S.ocupado = true;
+    api('cerrarDia').then(function (c) {
+      S.ocupado = false;
+      S.cierre = c;
+      if (S.estado) S.estado.cerrado = true;
+      renderCierre();
+      avisar('ok', 'Día cerrado. Entregá ' + plata(c.resumen.propinas) + ' en propinas.');
+    }).catch(function (e) {
+      S.ocupado = false;
+      renderCierre();
+      avisar('error', errorTexto(e));
+    });
+  });
+}
+
+function pedirReabrir() {
+  pedirPin('Reabrir el día', 'Para cargar un cobro que quedó afuera. Después volvé a cerrar el día y el resumen se recalcula.', function (pin, listo) {
+    api('reabrirDia', pin, S.fechaCierre).then(function (c) {
+      listo();
+      S.cierre = c;
+      if (S.estado) S.estado.cerrado = false;
+      renderCierre();
+      avisar('aviso', 'Día reabierto. Cargá el cobro y después cerrá el día de nuevo.');
+    }).catch(function (e) { listo(errorTexto(e)); });
+  });
+}
+
+/* ═════════════════════ Administración ═════════════════════ */
+function renderAdmin() {
+  var h = bannerDemo();
+  h += '<div class="barra"><div><h1>Administración</h1><div class="sub">Puestos, servicios y precios</div></div><button class="volver" onclick="salirAdmin()">‹ Volver a cobros</button></div>';
+
+  if (!S.admin) {
+    h += '<div class="tarjeta" style="max-width:420px;margin:0 auto">' +
+         '<div class="etiqueta">Ingresá el PIN</div>' +
+         '<input id="pinAdmin" class="campo" type="password" inputmode="numeric" autocomplete="off" maxlength="8" onkeydown="if(event.key===\'Enter\')entrarAdmin()" oninput="limpiarMsg()">' +
+         '<div id="msg" class="msg"></div>' +
+         '<button id="entrar" class="btn prim" onclick="entrarAdmin()">Entrar</button></div>';
+    $('app').innerHTML = h;
+    pintarMsg();
+    setTimeout(function () { if ($('pinAdmin')) $('pinAdmin').focus(); }, 50);
+    return;
+  }
+
+  var a = S.admin;
+  if (a.pinDeFabrica) h += '<div class="banner aviso" style="margin-bottom:16px"><b>Cambiá el PIN de fábrica.</b> Todavía es 1234 y cualquiera podría cambiar los precios.</div>';
+  h += '<div id="msg" class="msg" style="margin-top:0"></div>';
+
+  // Puestos
+  h += '<div class="tarjeta seccion"><h2>Puestos de trabajo</h2><p class="ayuda">Los puestos apagados no aparecen al cobrar, pero su historial queda guardado.</p><div class="chips">';
+  a.puestos.forEach(function (p) {
+    h += '<div class="chip' + (p.activo ? '' : ' off') + '">Puesto ' + p.numero +
+         '<button class="switch' + (p.activo ? ' on' : '') + '" aria-label="' + (p.activo ? 'Desactivar' : 'Activar') + ' puesto ' + p.numero + '" onclick="cambiarPuesto(' + p.numero + ',' + !p.activo + ')"></button></div>';
+  });
+  h += '</div><button class="btn sec" style="max-width:260px" onclick="agregarPuesto()">+ Agregar puesto</button></div>';
+
+  // Servicios
+  h += '<div class="tarjeta seccion"><h2>Servicios y precios</h2><p class="ayuda">Al cambiar un precio, los cobros y cierres anteriores no se modifican.</p>';
+  a.servicios.forEach(function (sv, i) {
+    h += '<div class="fila-serv">' +
+         '<input class="campo" id="sn' + i + '" value="' + esc(sv.nombre) + '" maxlength="40" aria-label="Nombre">' +
+         '<input class="campo" id="sp' + i + '" type="number" inputmode="numeric" min="0" step="1" value="' + sv.precio + '" aria-label="Precio">' +
+         '<button class="switch' + (sv.activo ? ' on' : '') + '" id="sa' + i + '" data-on="' + sv.activo + '" aria-label="Activo" onclick="this.classList.toggle(\'on\');this.dataset.on=this.classList.contains(\'on\')"></button>' +
+         '<button class="btn sec" onclick="guardarServicio(' + i + ')">Guardar</button></div>';
+  });
+  h += '<div class="etiqueta">Nuevo servicio</div><div class="linea">' +
+       '<input class="campo" id="nuevoNombre" placeholder="Nombre, por ejemplo Cejas" maxlength="40">' +
+       '<input class="campo" id="nuevoPrecio" type="number" inputmode="numeric" min="0" step="1" placeholder="Precio" style="max-width:150px">' +
+       '<button class="btn prim" onclick="agregarServicio()">Agregar</button></div></div>';
+
+  // Cierre automático
+  h += '<div class="tarjeta seccion"><h2>Cierre automático</h2><p class="ayuda">Si nadie toca «Cerrar día», el sistema cierra solo a esta hora.</p><div class="linea"><select class="campo" id="horaCierre" style="max-width:160px">';
+  for (var hh = 0; hh < 24; hh++) h += '<option value="' + hh + '"' + (hh === a.horaCierre ? ' selected' : '') + '>' + ('0' + hh).slice(-2) + ':30</option>';
+  h += '</select><button class="btn prim" onclick="guardarHora()">Guardar</button></div></div>';
+
+  // PIN
+  h += '<div class="tarjeta seccion"><h2>Cambiar PIN</h2><p class="ayuda">Entre 4 y 8 números. Solo lo debería saber el dueño.</p><div class="linea">' +
+       '<input class="campo" id="pin1" type="password" inputmode="numeric" maxlength="8" placeholder="PIN nuevo">' +
+       '<input class="campo" id="pin2" type="password" inputmode="numeric" maxlength="8" placeholder="Repetir PIN">' +
+       '<button class="btn prim" onclick="cambiarPin()">Cambiar</button></div></div>';
+
+  $('app').innerHTML = h;
+  pintarMsg();
+}
+
+function entrarAdmin() {
+  var pin = $('pinAdmin').value;
+  if (!pin) return avisar('error', 'Ingresá el PIN.');
+  $('entrar').disabled = true;
+  api('adminEntrar', pin).then(function (a) {
+    S.pin = pin; S.admin = a; S.msg = null; renderAdmin();
+  }).catch(function (e) {
+    $('entrar').disabled = false;
+    $('pinAdmin').value = '';
+    avisar('error', errorTexto(e));
+  });
+}
+
+function salirAdmin() {
+  S.pin = null;
+  S.admin = null;
+  // Puede haber cambiado puestos o precios: no mostrar datos viejos.
+  S.estado = null;
+  S.vista = 'cobro';
+  S.msg = null;
+  limpiarSeleccion();
+  $('app').innerHTML = '<div class="cargando">Cargando…</div>';
+  window.scrollTo(0, 0);
+  cargarEstado();
+}
+
+function accionAdmin(promesa, okTexto) {
+  return promesa.then(function (a) {
+    S.admin = a;
+    S.msg = okTexto ? { tipo: 'ok', texto: okTexto } : null;
+    renderAdmin();
+  }).catch(function (e) {
+    S.msg = { tipo: 'error', texto: errorTexto(e) };
+    pintarMsg();
+    window.scrollTo(0, 0);
+  });
+}
+
+function agregarPuesto() {
+  var siguiente = S.admin.puestos.reduce(function (m, p) { return Math.max(m, p.numero); }, 0) + 1;
+  confirmar('¿Agregar el Puesto ' + siguiente + '?', 'Va a aparecer en la pantalla de cobro.', 'Agregar', function () {
+    accionAdmin(api('adminAgregarPuesto', S.pin), 'Puesto ' + siguiente + ' agregado.');
+  });
+}
+function cambiarPuesto(n, activo) {
+  accionAdmin(api('adminCambiarPuesto', S.pin, n, activo), 'Puesto ' + n + (activo ? ' activado.' : ' desactivado.'));
+}
+function guardarServicio(i) {
+  var sv = S.admin.servicios[i];
+  var datos = { original: sv.nombre, nombre: $('sn' + i).value, precio: Number($('sp' + i).value), activo: $('sa' + i).dataset.on === 'true' };
+  if (!datos.nombre.trim()) { S.msg = { tipo: 'error', texto: 'El servicio necesita un nombre.' }; return pintarMsg(); }
+  accionAdmin(api('adminGuardarServicio', S.pin, datos), 'Servicio «' + datos.nombre.trim() + '» guardado.');
+}
+function agregarServicio() {
+  var nombre = $('nuevoNombre').value.trim();
+  var precio = $('nuevoPrecio').value;
+  if (!nombre || precio === '') { S.msg = { tipo: 'error', texto: 'Completá nombre y precio del servicio nuevo.' }; pintarMsg(); window.scrollTo(0, 0); return; }
+  accionAdmin(api('adminGuardarServicio', S.pin, { original: '', nombre: nombre, precio: Number(precio), activo: true }), 'Servicio «' + nombre + '» agregado.');
+}
+function guardarHora() {
+  accionAdmin(api('adminHoraCierre', S.pin, Number($('horaCierre').value)), 'Hora de cierre automático guardada.');
+}
+function cambiarPin() {
+  var p1 = $('pin1').value, p2 = $('pin2').value;
+  if (!/^\d{4,8}$/.test(p1)) { S.msg = { tipo: 'error', texto: 'El PIN tiene que tener entre 4 y 8 números.' }; pintarMsg(); window.scrollTo(0, 0); return; }
+  if (p1 !== p2) { S.msg = { tipo: 'error', texto: 'Los dos PIN no coinciden.' }; pintarMsg(); window.scrollTo(0, 0); return; }
+  accionAdmin(api('adminCambiarPin', S.pin, p1).then(function (a) { S.pin = p1; return a; }), 'PIN cambiado.');
+}
+
+/* ═════════════════════ Ventanas de confirmación ═════════════════════ */
+function confirmar(titulo, texto, boton, alAceptar) {
+  $('capa').innerHTML = '<div class="capa" onclick="if(event.target===this)cerrarModal()"><div class="modal" role="dialog" aria-modal="true">' +
+    '<h3>' + esc(titulo) + '</h3><p>' + esc(texto) + '</p>' +
+    '<div class="acciones"><button class="btn sec" onclick="cerrarModal()">Cancelar</button>' +
+    '<button class="btn prim" id="modalOk">' + esc(boton) + '</button></div></div></div>';
+  $('modalOk').onclick = function () { cerrarModal(); alAceptar(); };
+}
+
+function pedirPin(titulo, texto, alAceptar) {
+  $('capa').innerHTML = '<div class="capa"><div class="modal" role="dialog" aria-modal="true">' +
+    '<h3>' + esc(titulo) + '</h3><p>' + esc(texto) + '</p>' +
+    '<input id="pinModal" class="campo" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off">' +
+    '<div id="pinError" class="msg error"></div>' +
+    '<div class="acciones"><button class="btn sec" onclick="cerrarModal()">Cancelar</button>' +
+    '<button class="btn prim" id="modalOk">Confirmar</button></div></div></div>';
+  var enviar = function () {
+    var pin = $('pinModal').value;
+    if (!pin) { $('pinError').textContent = 'Ingresá el PIN.'; return; }
+    $('modalOk').disabled = true;
+    alAceptar(pin, function (error) {
+      if (error) { $('modalOk').disabled = false; $('pinModal').value = ''; $('pinError').textContent = error; }
+      else cerrarModal();
+    });
+  };
+  $('modalOk').onclick = enviar;
+  $('pinModal').onkeydown = function (ev) { if (ev.key === 'Enter') enviar(); };
+  setTimeout(function () { $('pinModal').focus(); }, 50);
+}
+
+function cerrarModal() { $('capa').innerHTML = ''; }
+
+/* ═════════════════════ Modo demostración ═════════════════════
+ * Imita al servidor con datos en memoria. Solo se usa fuera de Apps Script.
+ */
+var Demo = (function () {
+  function hoyStr() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  var db = {
+    pin: '1234', pinDeFabrica: true, horaCierre: 23,
+    puestos: [], servicios: [
+      { nombre: 'Corte', precio: 8000, activo: true },
+      { nombre: 'Barba', precio: 5000, activo: true },
+      { nombre: 'Corte y barba', precio: 12000, activo: true },
+      { nombre: 'Color', precio: 15000, activo: true }
+    ],
+    cobros: [], cerrados: {}
+  };
+  for (var i = 1; i <= 10; i++) db.puestos.push({ numero: i, activo: true });
+
+  // Algunos cobros de ejemplo: hoy y los dos días anteriores
+  (function sembrar() {
+    var semilla = 7;
+    function azar(n) { semilla = (semilla * 9301 + 49297) % 233280; return Math.floor(semilla / 233280 * n); }
+    [-2, -1, 0].forEach(function (dia) {
+      var fecha = sumarDias(hoyStr(), dia);
+      var cantidad = dia === 0 ? 9 : 60 + azar(40);
+      for (var k = 0; k < cantidad; k++) {
+        var sv = db.servicios[azar(4)];
+        var prop = azar(4) === 0 ? (1 + azar(3)) * 500 : 0;
+        db.cobros.push({
+          id: 'demo-' + dia + '-' + k, fecha: fecha,
+          hora: ('0' + (10 + Math.floor(k * 10 / cantidad))).slice(-2) + ':' + ('0' + azar(60)).slice(-2),
+          puesto: 1 + azar(10), servicio: sv.nombre, monto: sv.precio,
+          medio: azar(3) === 0 ? 'Efectivo' : 'Transferencia',
+          propina: prop, medioPropina: prop ? (azar(2) ? 'Efectivo' : 'Transferencia') : ''
+        });
+      }
+      if (dia < 0) db.cerrados[fecha] = true;
+    });
+  })();
+
+  function resumen(fecha) {
+    var cs = db.cobros.filter(function (c) { return c.fecha === fecha; });
+    var r = { cortes: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0, total: 0 };
+    var pp = {};
+    db.puestos.filter(function (p) { return p.activo; }).forEach(function (p) { pp[p.numero] = { puesto: p.numero, cortes: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0 }; });
+    cs.forEach(function (c) {
+      var p = pp[c.puesto] || (pp[c.puesto] = { puesto: c.puesto, cortes: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0 });
+      p.cortes++; p.servicios += c.monto; p.propinas += c.propina;
+      r.cortes++; r.servicios += c.monto; r.propinas += c.propina;
+      if (c.medio === 'Efectivo') { r.efectivo += c.monto; p.efectivo += c.monto; } else { r.transferencias += c.monto; p.transferencias += c.monto; }
+      if (c.propina) { if (c.medioPropina === 'Efectivo') { r.efectivo += c.propina; p.efectivo += c.propina; } else { r.transferencias += c.propina; p.transferencias += c.propina; } }
+    });
+    r.total = r.efectivo + r.transferencias;
+    r.porPuesto = Object.keys(pp).map(function (k) { return pp[k]; }).sort(function (a, b) { return a.puesto - b.puesto; });
+    return r;
+  }
+  function checkPin(pin) { if (pin !== db.pin) throw new Error('PIN incorrecto.'); }
+  function config() { return { puestos: db.puestos, servicios: db.servicios, horaCierre: db.horaCierre, pinDeFabrica: db.pinDeFabrica }; }
+
+  var api = {
+    getEstado: function () {
+      var hoy = hoyStr();
+      var cs = db.cobros.filter(function (c) { return c.fecha === hoy; });
+      return {
+        hoy: hoy, cerrado: !!db.cerrados[hoy],
+        puestos: db.puestos.filter(function (p) { return p.activo; }).map(function (p) { return p.numero; }),
+        servicios: db.servicios.filter(function (s) { return s.activo; }),
+        resumen: resumen(hoy), ultimos: cs.slice(-5).reverse(), urlPlanilla: '#'
+      };
+    },
+    guardarCobro: function (d) {
+      var hoy = hoyStr();
+      if (db.cerrados[hoy]) throw new Error('El día ya está cerrado. Para cargar un cobro tarde, reabrilo desde Cierre del día.');
+      var ahora = new Date();
+      db.cobros.push({ id: 'n' + Date.now(), fecha: hoy, hora: ('0' + ahora.getHours()).slice(-2) + ':' + ('0' + ahora.getMinutes()).slice(-2),
+        puesto: d.puesto, servicio: d.servicio, monto: Math.round(d.monto), medio: d.medio, propina: Math.round(d.propina || 0), medioPropina: d.propina ? d.medioPropina : '' });
+      return api.getEstado();
+    },
+    deshacerUltimo: function () {
+      var hoy = hoyStr();
+      if (db.cerrados[hoy]) throw new Error('El día está cerrado. No se puede deshacer.');
+      var u = db.cobros[db.cobros.length - 1];
+      if (!u || u.fecha !== hoy) throw new Error('No hay cobros de hoy para deshacer.');
+      db.cobros.pop();
+      var e = api.getEstado(); e.borrado = u; return e;
+    },
+    getCierre: function (fecha) { return { fecha: fecha, hoy: hoyStr(), cerrado: !!db.cerrados[fecha], resumen: resumen(fecha) }; },
+    cerrarDia: function () { db.cerrados[hoyStr()] = true; return api.getCierre(hoyStr()); },
+    reabrirDia: function (pin, fecha) { checkPin(pin); delete db.cerrados[fecha]; return api.getCierre(fecha); },
+    adminEntrar: function (pin) { checkPin(pin); return config(); },
+    adminAgregarPuesto: function (pin) { checkPin(pin); var m = db.puestos.reduce(function (x, p) { return Math.max(x, p.numero); }, 0); db.puestos.push({ numero: m + 1, activo: true }); return config(); },
+    adminCambiarPuesto: function (pin, n, activo) { checkPin(pin); db.puestos.forEach(function (p) { if (p.numero === n) p.activo = activo; }); return config(); },
+    adminGuardarServicio: function (pin, d) {
+      checkPin(pin);
+      var nombre = String(d.nombre).trim();
+      var dup = db.servicios.some(function (s) { return s.nombre.toLowerCase() === nombre.toLowerCase() && s.nombre.toLowerCase() !== String(d.original).toLowerCase(); });
+      if (dup) throw new Error('Ya existe un servicio llamado "' + nombre + '".');
+      if (!(d.precio >= 0)) throw new Error('Revisá el precio.');
+      var s = db.servicios.filter(function (x) { return x.nombre === d.original; })[0];
+      if (s) { s.nombre = nombre; s.precio = Math.round(d.precio); s.activo = d.activo; }
+      else db.servicios.push({ nombre: nombre, precio: Math.round(d.precio), activo: true });
+      return config();
+    },
+    adminCambiarPin: function (pin, nuevo) { checkPin(pin); if (nuevo === '1234') throw new Error('Elegí un PIN distinto al de fábrica.'); db.pin = nuevo; db.pinDeFabrica = false; return config(); },
+    adminHoraCierre: function (pin, h) { checkPin(pin); db.horaCierre = h; return config(); }
+  };
+  return api;
+})();
+
+iniciar();
+</script>
+</body>
+</html>
