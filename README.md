@@ -1,6 +1,6 @@
-# Sistema de cobros para barberías
+# Control de caja diario
 
-Web app para registrar los cobros de una barbería desde una tablet en la caja y cerrar el día sin cuentas a mano. Reemplaza la planilla de papel donde se anotan los pagos en efectivo y por transferencia.
+**Sistema de cobros para barberías.** Web app para registrar los cobros de una barbería desde una tablet en la caja y cerrar el día sin cuentas a mano. Reemplaza la planilla de papel donde se anotan los pagos en efectivo y por transferencia.
 
 Funciona con **Google Apps Script + Google Sheets**: no necesita servidor ni base de datos, y no tiene costos de plataforma. Los datos quedan en una planilla de Google de la cuenta del local.
 
@@ -27,7 +27,7 @@ Funciona con **Google Apps Script + Google Sheets**: no necesita servidor ni bas
 - Agregar puestos de trabajo y activar o desactivar los existentes (el historial no se pierde).
 - Agregar servicios, cambiar nombres y precios, o desactivarlos. Los cambios de precio no tocan los cobros ni los cierres anteriores.
 - Configurar la hora del cierre automático.
-- El **PIN lo asigna el instalador** desde la planilla (menú *Cobros → Asignar PIN del cliente*), y desde ahí también se resetea si el cliente se lo olvida. Se guarda con hash SHA-256 y sal, y se bloquea por 5 minutos después de 5 intentos fallidos.
+- El **PIN lo asigna el instalador** desde la planilla (menú *Control de caja → Asignar PIN del cliente*), y desde ahí también se resetea si el cliente se lo olvida. Se guarda con hash SHA-256 y sal, y se bloquea por 5 minutos después de 5 intentos fallidos.
 
 **Diseño adaptativo**: el mismo código se ve bien en tablet, celular y PC.
 
@@ -88,7 +88,7 @@ Requisitos: Node.js y [clasp](https://github.com/google/clasp) (`npm install -g 
    ```
 4. Crear la planilla con su proyecto de Apps Script:
    ```bash
-   clasp create --type sheets --title "Cobros - Nombre del local" --rootDir src
+   clasp create --type sheets --title "Control de caja diario - Nombre del local" --rootDir src
    ```
    Esto crea `.clasp.json` (no se sube a Git: cada cliente tiene el suyo).
    clasp puede reemplazar `src/appsscript.json` por uno vacío; recuperá el del repo:
@@ -100,7 +100,7 @@ Requisitos: Node.js y [clasp](https://github.com/google/clasp) (`npm install -g 
    clasp push
    ```
 6. Abrir el editor (`clasp open`), elegir la función `setup` y ejecutarla. Autorizar los permisos. Crea las hojas, 10 puestos, servicios de ejemplo y el cierre automático.
-7. Volver a abrir la planilla y en el menú **Cobros → Asignar PIN del cliente** cargar el PIN del dueño.
+7. Volver a abrir la planilla y en el menú **Control de caja → Asignar PIN del cliente** cargar el PIN del dueño.
 8. **Implementar → Nueva implementación → Aplicación web.** Ejecutar como: *Yo*. Acceso: *Solo yo*.
 9. Abrir el link de la web app en la tablet (logueada con la cuenta del local) y agregarla a la pantalla de inicio.
 10. Entrar a Administración con el PIN y cargar los puestos, servicios y precios reales.

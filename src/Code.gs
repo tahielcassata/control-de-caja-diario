@@ -1,5 +1,6 @@
 /**
- * Sistema de cobros para barberías
+ * Control de caja diario
+ * Sistema de cobros para barberías.
  * Backend en Google Apps Script + Google Sheets.
  *
  * Hojas que usa (las crea `setup()`):
@@ -34,7 +35,7 @@ var MAX_INTENTOS_PIN = 5;
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('index')
-    .setTitle('Cobros')
+    .setTitle('Control de caja diario')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
     .addMetaTag('mobile-web-app-capable', 'yes')
     .addMetaTag('apple-mobile-web-app-capable', 'yes');
@@ -42,7 +43,7 @@ function doGet() {
 
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('Cobros')
+    .createMenu('Control de caja')
     .addItem('Configurar sistema (primera vez)', 'setup')
     .addItem('Asignar PIN del cliente', 'asignarPinCliente')
     .addToUi();
@@ -93,11 +94,11 @@ function setup() {
   var hoja1 = ss.getSheetByName('Hoja 1') || ss.getSheetByName('Sheet1');
   if (hoja1 && hoja1.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(hoja1);
 
-  return 'Listo. Ahora asigná el PIN del cliente desde el menú Cobros → Asignar PIN del cliente.';
+  return 'Listo. Ahora asigná el PIN del cliente desde el menú Control de caja → Asignar PIN del cliente.';
 }
 
 /**
- * Lo usa el instalador desde la planilla: menú Cobros → Asignar PIN del cliente.
+ * Lo usa el instalador desde la planilla: menú Control de caja → Asignar PIN del cliente.
  * Sirve para el PIN inicial y para resetearlo si el cliente se lo olvida.
  * No se puede llamar desde la web app (necesita la interfaz de la planilla).
  */

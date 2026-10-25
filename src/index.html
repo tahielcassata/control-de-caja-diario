@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Cobros</title>
+<title>Control de caja diario</title>
 <style>
   :root {
     --oscuro: #1C1B19;
@@ -42,6 +42,7 @@
 
   .app { max-width: 1280px; margin: 0 auto; padding: 16px; }
   .barra { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .marca { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--acento-osc); margin-bottom: 2px; font-weight: 600; }
   .barra h1 { font-size: 22px; margin: 0; font-weight: 600; }
   .barra .sub { font-size: 14px; color: var(--texto-3); margin-top: 2px; }
   .iconos { display: flex; gap: 4px; }
@@ -249,7 +250,7 @@ function bannerDemo() {
 function renderCobro() {
   var e = S.estado, s = S.sel, r = e.resumen;
   var h = bannerDemo();
-  h += '<div class="barra"><div><h1>Cobros de hoy</h1><div class="sub">' + esc(fechaLarga(e.hoy)) + '</div></div>' +
+  h += '<div class="barra"><div><div class="marca">Control de caja diario</div><h1>Cobros de hoy</h1><div class="sub">' + esc(fechaLarga(e.hoy)) + '</div></div>' +
        '<div class="iconos">' +
        '<button class="icono" onclick="abrirPlanilla()" aria-label="Abrir planilla" title="Planilla">' + ICONO_PLANILLA + '</button>' +
        '<button class="icono" onclick="ir(\'admin\')" aria-label="Administración" title="Administración">' + ICONO_AJUSTES + '</button>' +
