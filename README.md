@@ -149,3 +149,7 @@ Google Apps Script (V8), Google Sheets, HTML, CSS y JavaScript sin frameworks, c
 ## Autor
 
 Tahiel Cassata
+
+## Licencia
+
+© 2026 Tahiel Cassata. **Todos los derechos reservados.** El código está publicado para que se pueda ver como parte de mi portfolio, pero no está permitido usarlo, copiarlo, instalarlo para terceros ni venderlo sin mi autorización por escrito. Ver [LICENSE](LICENSE).
