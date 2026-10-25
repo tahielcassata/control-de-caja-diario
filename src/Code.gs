@@ -175,32 +175,68 @@ function getEstado() {
   };
 }
 
+/**
+ * Guarda un cobro. La pantalla manda:
+ *   id      → código único generado en la tablet (evita duplicados si se reintenta)
+ *   cuando  → momento real del cobro (sirve cuando se cargó sin internet y se sube después)
+ * Es idempotente: si llega dos veces el mismo id, se guarda una sola vez.
+ */
 function guardarCobro(datos) {
+  datos = datos || {};
   var lock = LockService.getScriptLock();
   lock.waitLock(15000);
+  var fecha, recalcular = false, duplicado = false;
   try {
-    var hoy = fechaHoy_();
-    if (estaCerrado_(hoy)) throw new Error('El día ya está cerrado. Para cargar un cobro tarde, reabrilo desde Cierre del día.');
-
-    var cobro = validarCobro(datos, leerPuestos_(), leerServicios_());
     var ahora = new Date();
-    getHoja_(HOJA_COBROS).appendRow([
-      Utilities.getUuid(),
-      hoy,
-      Utilities.formatDate(ahora, zona_(), 'HH:mm'),
-      cobro.puesto,
-      cobro.servicio,
-      cobro.monto,
-      cobro.medio,
-      cobro.propina || '',
-      cobro.propina ? cobro.medioPropina : '',
-      ahora
-    ]);
-    SpreadsheetApp.flush();
+    var momento = momentoDelCobro_(datos.cuando, ahora);
+    fecha = Utilities.formatDate(momento, zona_(), 'yyyy-MM-dd');
+    var id = String(datos.id || '');
+    if (id && !/^[A-Za-z0-9_-]{8,64}$/.test(id)) throw new Error('Código de cobro inválido.');
+
+    if (id && cobrosDeFecha_(fecha).some(function (c) { return c.id === id; })) {
+      duplicado = true;
+    } else {
+      if (estaCerrado_(fecha)) {
+        var cierre = momentoCierre_(fecha);
+        // Se acepta solo si el cobro se hizo antes de cerrar (por ejemplo, quedó sin subir por falta de internet).
+        if (cierre && momento.getTime() >= cierre.getTime()) {
+          throw new Error('El día ya está cerrado. Para cargar un cobro tarde, reabrilo desde Cierre del día.');
+        }
+        recalcular = true;
+      }
+      var diferido = ahora.getTime() - momento.getTime() > 2 * 60 * 1000;
+      var cobro = validarCobro(datos, leerPuestos_(), leerServicios_(), diferido);
+      getHoja_(HOJA_COBROS).appendRow([
+        id || Utilities.getUuid(),
+        fecha,
+        Utilities.formatDate(momento, zona_(), 'HH:mm'),
+        cobro.puesto,
+        cobro.servicio,
+        cobro.monto,
+        cobro.medio,
+        cobro.propina || '',
+        cobro.propina ? cobro.medioPropina : '',
+        ahora
+      ]);
+      SpreadsheetApp.flush();
+    }
   } finally {
     lock.releaseLock();
   }
-  return getEstado();
+  if (recalcular) recalcularCierre_(fecha);
+  var estado = getEstado();
+  estado.duplicado = duplicado;
+  return estado;
+}
+
+/** Usa la hora real del cobro si es razonable (hasta 3 días atrás, no futura); si no, la actual. */
+function momentoDelCobro_(cuando, ahora) {
+  if (!cuando) return ahora;
+  var m = new Date(cuando);
+  if (isNaN(m.getTime())) return ahora;
+  var diff = ahora.getTime() - m.getTime();
+  if (diff < -2 * 60 * 1000 || diff > 3 * 24 * 60 * 60 * 1000) return ahora;
+  return diff < 0 ? ahora : m;
 }
 
 function deshacerUltimo() {
@@ -416,15 +452,21 @@ function filaVacia_(n) {
 }
 
 /** Valida y normaliza un cobro. Lanza un Error con un mensaje para el usuario. */
-function validarCobro(d, puestos, servicios) {
+function validarCobro(d, puestos, servicios, diferido) {
   d = d || {};
   var puesto = Number(d.puesto);
-  var existePuesto = puestos.some(function (p) { return p.numero === puesto && p.activo; });
-  if (!existePuesto) throw new Error('Elegí un puesto válido.');
-
-  var servicio = String(d.servicio || '');
-  var existeServicio = servicios.some(function (s) { return s.nombre === servicio && s.activo; });
-  if (!existeServicio) throw new Error('Elegí un servicio válido.');
+  var servicio = String(d.servicio || '').trim();
+  if (diferido) {
+    // Cobro cargado sin internet: el puesto o el servicio pudieron cambiar en el medio.
+    // Se guarda igual, porque el cobro ya ocurrió.
+    if (!(puesto >= 1) || Math.floor(puesto) !== puesto) throw new Error('Elegí un puesto válido.');
+    if (!servicio || servicio.length > 60) throw new Error('Elegí un servicio válido.');
+  } else {
+    var existePuesto = puestos.some(function (p) { return p.numero === puesto && p.activo; });
+    if (!existePuesto) throw new Error('Elegí un puesto válido.');
+    var existeServicio = servicios.some(function (s) { return s.nombre === servicio && s.activo; });
+    if (!existeServicio) throw new Error('Elegí un servicio válido.');
+  }
 
   var monto = Math.round(Number(d.monto));
   if (!isFinite(monto) || monto <= 0 || monto > MONTO_MAXIMO) throw new Error('Revisá el monto.');
@@ -454,7 +496,7 @@ function cerrarFecha_(fecha, tipo) {
     var resumen = calcularResumen(cobrosDeFecha_(fecha), []);
     if (resumen.atenciones === 0 && tipo === 'Automático') {
       // Día sin cobros (franco): se marca cerrado sin escribir filas.
-      PropertiesService.getScriptProperties().setProperty('CERRADO_' + fecha, tipo);
+      PropertiesService.getScriptProperties().setProperty('CERRADO_' + fecha, tipo + '|' + new Date().toISOString());
       return;
     }
     borrarCierreGuardado_(fecha);
@@ -465,7 +507,7 @@ function cerrarFecha_(fecha, tipo) {
     filas.push([fecha, 'TOTAL', resumen.atenciones, resumen.servicios, resumen.propinas, resumen.efectivo, resumen.transferencias, resumen.total, tipo, ahora]);
     var hoja = getHoja_(HOJA_CIERRES);
     hoja.getRange(hoja.getLastRow() + 1, 1, filas.length, COLS_CIERRES.length).setValues(filas);
-    PropertiesService.getScriptProperties().setProperty('CERRADO_' + fecha, tipo);
+    PropertiesService.getScriptProperties().setProperty('CERRADO_' + fecha, tipo + '|' + ahora.toISOString());
     SpreadsheetApp.flush();
   } finally {
     lock.releaseLock();
@@ -480,6 +522,30 @@ function cerrarAyerSiQuedoAbierto_() {
 
 function estaCerrado_(fecha) {
   return !!PropertiesService.getScriptProperties().getProperty('CERRADO_' + fecha);
+}
+
+/** Momento en que se cerró el día (null si no se sabe). */
+function momentoCierre_(fecha) {
+  var v = PropertiesService.getScriptProperties().getProperty('CERRADO_' + fecha) || '';
+  var partes = v.split('|');
+  if (partes.length < 2) return null;
+  var d = new Date(partes[1]);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Vuelve a calcular el cierre de un día ya cerrado (llegó un cobro que estaba pendiente). */
+function recalcularCierre_(fecha) {
+  var props = PropertiesService.getScriptProperties();
+  var tipo = (props.getProperty('CERRADO_' + fecha) || 'Automático').split('|')[0];
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    borrarCierreGuardado_(fecha);
+    props.deleteProperty('CERRADO_' + fecha);
+  } finally {
+    lock.releaseLock();
+  }
+  cerrarFecha_(fecha, tipo);
 }
 
 function leerCierreGuardado_(fecha) {

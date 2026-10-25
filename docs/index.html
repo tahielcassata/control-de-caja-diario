@@ -164,6 +164,7 @@ function api(fn) {
   if (MODO_DEMO) {
     return new Promise(function (ok, mal) {
       setTimeout(function () {
+        if (Demo.offline) return mal(new Error('NetworkError: Connection failure due to HTTP 0'));
         try { ok(JSON.parse(JSON.stringify(Demo[fn].apply(null, args)))); }
         catch (e) { mal(e); }
       }, 120);
@@ -204,17 +205,148 @@ function sumarDias(f, n) {
   var d = new Date(p[0], p[1] - 1, p[2] + n);
   return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
 }
-function errorTexto(e) { return (e && e.message ? e.message : String(e)).replace(/^Error:\s*/, ''); }
+function textoCrudo(e) { return (e && e.message ? e.message : String(e)).replace(/^Error:\s*/, ''); }
+function esErrorDeRed(e) {
+  if (navigator.onLine === false) return true;
+  return /network|HTTP 0|failed to fetch|conexi[oó]n|timed? ?out|tiempo de espera/i.test(textoCrudo(e));
+}
+function errorTexto(e) { return esErrorDeRed(e) ? 'Sin conexión a internet. Probá de nuevo cuando vuelva.' : textoCrudo(e); }
 
 var ICONO_PLANILLA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/></svg>';
 var ICONO_AJUSTES = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
 
+/* ═════════════════════ Cobros sin internet ═════════════════════
+ * Cada cobro se guarda primero en la tablet (localStorage) y después se sube.
+ * Si no hay internet, queda en la cola y se sube solo cuando vuelve la conexión.
+ * Cada cobro lleva un id único y la hora real, así el servidor no lo duplica
+ * y lo registra con la hora en que se cobró.
+ */
+var CLAVE_COLA = 'control-caja:pendientes';
+var Cola = { items: [], errores: [], subiendo: false, sinConexion: false, avisos: {} };
+
+function colaCargar() {
+  try { Cola.items = JSON.parse(localStorage.getItem(CLAVE_COLA) || '[]'); } catch (e) { Cola.items = Cola.items || []; }
+  if (!Array.isArray(Cola.items)) Cola.items = [];
+}
+function colaGuardar() {
+  try { localStorage.setItem(CLAVE_COLA, JSON.stringify(Cola.items)); } catch (e) { /* sin almacenamiento: queda en memoria */ }
+}
+function nuevoId() {
+  if (window.crypto && crypto.randomUUID) return 'c-' + crypto.randomUUID();
+  var h = ''; for (var i = 0; i < 24; i++) h += Math.floor(Math.random() * 16).toString(16);
+  return 'c-' + h;
+}
+function fechaLocal(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function horaLocal(d) { return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+
+/** Sube los cobros pendientes de a uno, en orden. */
+function sincronizar() {
+  if (Cola.subiendo) return;
+  if (!Cola.items.length) { Cola.sinConexion = false; pintarConexion(); return; }
+  Cola.subiendo = true;
+  pintarConexion();
+  var item = Cola.items[0];
+  api('guardarCobro', item.datos).then(function (e) {
+    quitarDeCola(item.id);
+    Cola.subiendo = false;
+    Cola.sinConexion = false;
+    S.estado = e;
+    avisarResultado(item, 'ok');
+    refrescarVista();
+    sincronizar();
+  }, function (err) {
+    Cola.subiendo = false;
+    if (esErrorDeRed(err)) {
+      Cola.sinConexion = true;
+      Cola.items.forEach(function (it) { avisarResultado(it, 'red'); });
+      pintarConexion();
+      programarReintento();
+    } else {
+      // El servidor rechazó el cobro (por ejemplo, día cerrado): se saca de la cola y se avisa.
+      quitarDeCola(item.id);
+      if (!avisarResultado(item, 'error', textoCrudo(err))) Cola.errores.push({ item: item, motivo: textoCrudo(err) });
+      refrescarVista();
+      sincronizar();
+    }
+  });
+}
+function quitarDeCola(id) {
+  Cola.items = Cola.items.filter(function (it) { return it.id !== id; });
+  colaGuardar();
+}
+/** Avisa a quien espera el resultado de ese cobro. Devuelve true si alguien lo esperaba. */
+function avisarResultado(item, resultado, motivo) {
+  var fn = Cola.avisos[item.id];
+  if (!fn) return false;
+  delete Cola.avisos[item.id];
+  fn(resultado, motivo);
+  return true;
+}
+var temporizadorReintento = null;
+function programarReintento() {
+  if (temporizadorReintento) return;
+  temporizadorReintento = setTimeout(function () { temporizadorReintento = null; sincronizar(); }, 15000);
+}
+function pendientesDeHoy() {
+  var hoy = S.estado ? S.estado.hoy : fechaLocal(new Date());
+  return Cola.items.filter(function (it) { return it.fecha === hoy; });
+}
+/** Totales del servidor + cobros que todavía están en la tablet. */
+function resumenVisible() {
+  var r = JSON.parse(JSON.stringify(S.estado.resumen));
+  pendientesDeHoy().forEach(function (it) {
+    var d = it.datos;
+    r.atenciones++; r.servicios += d.monto; r.propinas += d.propina || 0;
+    if (d.medio === 'Efectivo') r.efectivo += d.monto; else r.transferencias += d.monto;
+    if (d.propina) { if (d.medioPropina === 'Efectivo') r.efectivo += d.propina; else r.transferencias += d.propina; }
+  });
+  r.total = r.efectivo + r.transferencias;
+  return r;
+}
+function ultimosVisibles() {
+  var pend = pendientesDeHoy().slice().reverse().map(function (it) {
+    var d = it.datos;
+    return { hora: it.hora, puesto: d.puesto, servicio: d.servicio, monto: d.monto, propina: d.propina, pendiente: true };
+  });
+  return pend.concat(S.estado.ultimos).slice(0, 5);
+}
+function htmlConexion() {
+  var h = '';
+  var n = Cola.items.length;
+  if (n) {
+    var txt = n === 1 ? '1 cobro guardado en la tablet' : n + ' cobros guardados en la tablet';
+    h += Cola.sinConexion
+      ? '<div class="banner aviso" style="margin-bottom:16px"><b>Sin conexión a internet.</b> ' + txt + '. Se suben solos cuando vuelva la conexión; podés seguir cobrando normal.</div>'
+      : '<div class="banner aviso" style="margin-bottom:16px">Subiendo ' + (n === 1 ? '1 cobro' : n + ' cobros') + '…</div>';
+  }
+  Cola.errores.forEach(function (er, i) {
+    var d = er.item.datos;
+    h += '<div class="banner" style="background:var(--error-fondo);color:var(--error);margin-bottom:16px"><b>No se pudo subir un cobro:</b> ' +
+         esc(er.item.hora) + ' · Puesto ' + d.puesto + ' · ' + esc(d.servicio) + ' · ' + plata(d.monto) + '. ' + esc(er.motivo) +
+         ' <button class="volver" style="margin-left:8px;padding:4px 10px" onclick="Cola.errores.splice(' + i + ',1);pintarConexion()">Entendido</button></div>';
+  });
+  return h;
+}
+function pintarConexion() {
+  var el = $('conexion');
+  if (el) el.innerHTML = htmlConexion();
+  if (S.vista === 'cobro' && S.estado && $('totales')) $('totales').innerHTML = htmlTotales();
+}
+function refrescarVista() {
+  if (S.vista === 'cobro' && S.estado) renderCobro();
+  else pintarConexion();
+}
+
 /* ═════════════════════ Arranque ═════════════════════ */
 function iniciar() {
-  cargarEstado();
+  colaCargar();
+  cargarEstado().then(sincronizar);
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && S.vista === 'cobro' && !S.ocupado) cargarEstado(true);
+    if (document.visibilityState === 'visible' && S.vista === 'cobro' && !S.ocupado) cargarEstado(true).then(sincronizar);
   });
+  window.addEventListener('online', function () { sincronizar(); cargarEstado(true); });
+  window.addEventListener('offline', function () { if (Cola.items.length) { Cola.sinConexion = true; pintarConexion(); } });
+  setInterval(function () { if (Cola.items.length && !Cola.subiendo) sincronizar(); }, 20000);
 }
 
 function cargarEstado(silencioso) {
@@ -224,7 +356,11 @@ function cargarEstado(silencioso) {
     if (cambioDia) limpiarSeleccion(true);
     if (S.vista === 'cobro') render();
   }).catch(function (e) {
-    if (!silencioso) $('app').innerHTML = '<div class="cargando">No se pudo cargar: ' + esc(errorTexto(e)) + '<br><br><button class="volver" onclick="cargarEstado()">Reintentar</button></div>';
+    if (S.estado) { if (esErrorDeRed(e) && Cola.items.length) { Cola.sinConexion = true; pintarConexion(); } return; }
+    if (silencioso) return;
+    var extra = Cola.items.length ? '<br>Hay ' + Cola.items.length + ' cobro(s) guardados en la tablet: se suben cuando vuelva la conexión.' : '';
+    $('app').innerHTML = '<div class="cargando">' + (esErrorDeRed(e) ? 'Sin conexión a internet. La app necesita internet para abrirse.' : 'No se pudo cargar: ' + esc(textoCrudo(e))) +
+      extra + '<br><br><button class="volver" onclick="cargarEstado().then(sincronizar)">Reintentar</button></div>';
   });
 }
 
@@ -250,7 +386,14 @@ function bannerDemo() {
     var on = r === Demo.rubro;
     h += '<button onclick="verRubro(\'' + r + '\')" style="border:1px solid ' + (on ? '#D9A441' : '#5A564F') + ';background:' + (on ? '#D9A441' : 'transparent') + ';color:' + (on ? '#1C1B19' : '#E7E2D9') + ';border-radius:999px;padding:4px 12px;font-size:14px">' + r + '</button>';
   });
+  h += '<button onclick="simularCorte()" style="margin-left:auto;border:1px solid #5A564F;background:' + (Demo.offline ? '#A3352D' : 'transparent') + ';color:#E7E2D9;border-radius:999px;padding:4px 12px;font-size:14px">' +
+       (Demo.offline ? 'Volver a conectar' : 'Simular corte de internet') + '</button>';
   return h + '</div></div>';
+}
+function simularCorte() {
+  Demo.offline = !Demo.offline;
+  if (!Demo.offline) sincronizar();
+  render();
 }
 function verRubro(r) { location.search = '?rubro=' + encodeURIComponent(r); }
 
@@ -263,6 +406,7 @@ function renderCobro() {
        '<button class="icono" onclick="abrirPlanilla()" aria-label="Abrir planilla" title="Planilla">' + ICONO_PLANILLA + '</button>' +
        '<button class="icono" onclick="ir(\'admin\')" aria-label="Administración" title="Administración">' + ICONO_AJUSTES + '</button>' +
        '</div></div>';
+  h += '<div id="conexion">' + htmlConexion() + '</div>';
 
   h += '<div class="grilla"><div class="tarjeta">';
   if (e.cerrado) {
@@ -297,16 +441,7 @@ function renderCobro() {
   }
   h += '</div>';
 
-  h += '<div class="lado"><div class="tarjeta"><div class="metricas">' +
-       metrica('Efectivo', r.efectivo) + metrica('Transferencias', r.transferencias) +
-       metrica('Total del día', r.total) + metrica('Propinas a entregar', r.propinas, true) +
-       '</div>';
-  h += '<div class="etiqueta">Últimos cobros</div><ul class="lista">';
-  if (!e.ultimos.length) h += '<li class="vacia">Todavía no hay cobros hoy.</li>';
-  e.ultimos.forEach(function (c) {
-    h += '<li><span>' + esc(c.hora) + ' · Puesto ' + c.puesto + ' · ' + esc(c.servicio) + '</span><span class="num">' + plata(c.monto) + (c.propina ? ' <span class="gris">+ ' + plata(c.propina) + '</span>' : '') + '</span></li>';
-  });
-  h += '</ul>';
+  h += '<div class="lado"><div class="tarjeta"><div id="totales">' + htmlTotales() + '</div>';
   h += '<button class="btn sec" onclick="ir(\'cierre\')">Cierre del día</button></div></div></div>';
 
   // conservar lo tipeado al redibujar
@@ -319,6 +454,21 @@ function renderCobro() {
     mostrarMedioPropina();
     pintarMsg();
   }
+}
+
+function htmlTotales() {
+  var r = resumenVisible(), ult = ultimosVisibles();
+  var h = '<div class="metricas">' +
+       metrica('Efectivo', r.efectivo) + metrica('Transferencias', r.transferencias) +
+       metrica('Total del día', r.total) + metrica('Propinas a entregar', r.propinas, true) + '</div>';
+  h += '<div class="etiqueta">Últimos cobros</div><ul class="lista">';
+  if (!ult.length) h += '<li class="vacia">Todavía no hay cobros hoy.</li>';
+  ult.forEach(function (c) {
+    h += '<li><span>' + esc(c.hora) + ' · Puesto ' + c.puesto + ' · ' + esc(c.servicio) +
+         (c.pendiente ? ' <span style="color:var(--aviso);font-size:13px">· sin subir</span>' : '') + '</span><span class="num">' +
+         plata(c.monto) + (c.propina ? ' <span class="gris">+ ' + plata(c.propina) + '</span>' : '') + '</span></li>';
+  });
+  return h + '</ul>';
 }
 
 function botonMedio(campo, valor) {
@@ -367,25 +517,59 @@ function guardar() {
   if (propina < 0) return avisar('error', 'Revisá la propina.');
   if (propina > 0 && !s.medioPropina) return avisar('error', 'Elegí el medio de la propina.');
 
-  var datos = { puesto: s.puesto, servicio: s.servicio, monto: monto, medio: s.medio, propina: propina, medioPropina: propina > 0 ? s.medioPropina : '' };
+  var ahora = new Date();
+  var id = nuevoId();
+  var item = {
+    id: id, fecha: fechaLocal(ahora), hora: horaLocal(ahora),
+    datos: { id: id, cuando: ahora.toISOString(), puesto: s.puesto, servicio: s.servicio, monto: Math.round(monto), medio: s.medio,
+             propina: Math.round(propina), medioPropina: propina > 0 ? s.medioPropina : '' }
+  };
+  // Primero se guarda en la tablet: aunque se corte internet o se cierre la app, no se pierde.
+  Cola.items.push(item);
+  colaGuardar();
+  var texto = 'Puesto ' + item.datos.puesto + ' · ' + item.datos.servicio + ' · ' + plata(item.datos.monto);
+
+  var listo = function (resultado, motivo) {
+    S.ocupado = false;
+    if (resultado === 'error') {
+      renderCobro();
+      return avisar('error', 'No se guardó: ' + motivo);
+    }
+    limpiarSeleccion();
+    S.msg = resultado === 'ok'
+      ? { tipo: 'ok', texto: 'Cobro guardado: ' + texto }
+      : { tipo: 'aviso', texto: 'Guardado en la tablet (sin internet): ' + texto + '. Se sube solo cuando vuelva la conexión.' };
+    renderCobro();
+  };
+
+  if (Cola.sinConexion) {
+    // Ya sabemos que no hay internet: no hace falta esperar.
+    listo('red');
+    sincronizar();
+    return;
+  }
   S.ocupado = true;
   $('guardar').disabled = true;
   $('guardar').textContent = 'Guardando…';
-  api('guardarCobro', datos).then(function (e) {
-    S.ocupado = false;
-    S.estado = e;
-    limpiarSeleccion();
-    S.msg = { tipo: 'ok', texto: 'Cobro guardado: Puesto ' + datos.puesto + ' · ' + datos.servicio + ' · ' + plata(datos.monto) };
-    renderCobro();
-  }).catch(function (err) {
-    S.ocupado = false;
-    renderCobro();
-    avisar('error', errorTexto(err));
-  });
+  Cola.avisos[id] = listo;
+  sincronizar();
 }
 
 function deshacer() {
   if (S.ocupado) return;
+  var pend = pendientesDeHoy();
+  if (pend.length) {
+    // El último cobro todavía está en la tablet: se borra de ahí.
+    var it = pend[pend.length - 1];
+    if (Cola.subiendo && Cola.items[0] && Cola.items[0].id === it.id) return avisar('aviso', 'Ese cobro se está subiendo justo ahora. Probá de nuevo en unos segundos.');
+    var d = it.datos;
+    return confirmar('¿Deshacer el último cobro?', 'Se va a borrar: Puesto ' + d.puesto + ' · ' + d.servicio + ' · ' + plata(d.monto) + (d.propina ? ' + propina ' + plata(d.propina) : '') + ' (' + it.hora + ').', 'Deshacer', function () {
+      quitarDeCola(it.id);
+      delete Cola.avisos[it.id];
+      S.msg = { tipo: 'aviso', texto: 'Se deshizo: Puesto ' + d.puesto + ' · ' + d.servicio + ' · ' + plata(d.monto) + '. Cargalo de nuevo si hace falta.' };
+      renderCobro();
+    });
+  }
   if (!S.estado.ultimos.length) return avisar('error', 'No hay cobros para deshacer.');
   var c = S.estado.ultimos[0];
   confirmar('¿Deshacer el último cobro?', 'Se va a borrar: Puesto ' + c.puesto + ' · ' + c.servicio + ' · ' + plata(c.monto) + (c.propina ? ' + propina ' + plata(c.propina) : '') + ' (' + c.hora + ').', 'Deshacer', function () {
@@ -399,7 +583,7 @@ function deshacer() {
     }).catch(function (err) {
       S.ocupado = false;
       renderCobro();
-      avisar('error', errorTexto(err));
+      avisar('error', esErrorDeRed(err) ? 'Sin internet no se puede deshacer un cobro que ya se subió. Probá cuando vuelva la conexión.' : textoCrudo(err));
     });
   });
 }
@@ -427,6 +611,7 @@ function cargarCierre() {
 function renderCierre() {
   var h = bannerDemo();
   h += '<div class="barra"><div><h1>Cierre del día</h1></div><button class="volver" onclick="ir(\'cobro\')">‹ Volver a cobros</button></div>';
+  h += '<div id="conexion">' + htmlConexion() + '</div>';
   var hoy = S.estado ? S.estado.hoy : S.fechaCierre;
   h += '<div class="tarjeta"><div class="nav-fecha">' +
        '<button onclick="moverDia(-1)" aria-label="Día anterior">‹</button>' +
@@ -474,6 +659,10 @@ function moverDia(n) {
 }
 
 function pedirCerrar() {
+  if (Cola.items.length) {
+    sincronizar();
+    return avisar('error', 'Hay ' + (Cola.items.length === 1 ? '1 cobro' : Cola.items.length + ' cobros') + ' sin subir (falta internet). Cuando se suban, cerrá el día; si nadie lo cierra, se cierra solo y se recalcula.');
+  }
   confirmar('¿Cerrar el día?', 'Se guarda el resumen y no se pueden cargar más cobros de hoy. Mañana la pantalla arranca en cero.', 'Cerrar día', function () {
     S.ocupado = true;
     api('cerrarDia').then(function (c) {
@@ -749,10 +938,11 @@ var Demo = (function () {
       };
     },
     guardarCobro: function (d) {
-      var hoy = hoyStr();
-      if (db.cerrados[hoy]) throw new Error('El día ya está cerrado. Para cargar un cobro tarde, reabrilo desde Cierre del día.');
-      var ahora = new Date();
-      db.cobros.push({ id: 'n' + Date.now(), fecha: hoy, hora: ('0' + ahora.getHours()).slice(-2) + ':' + ('0' + ahora.getMinutes()).slice(-2),
+      if (d.id && db.cobros.some(function (c) { return c.id === d.id; })) { var dup = api.getEstado(); dup.duplicado = true; return dup; }
+      var ahora = d.cuando ? new Date(d.cuando) : new Date();
+      var fecha = fechaLocal(ahora);
+      if (db.cerrados[fecha] && fecha === hoyStr() && Date.now() - ahora.getTime() < 60000) throw new Error('El día ya está cerrado. Para cargar un cobro tarde, reabrilo desde Cierre del día.');
+      db.cobros.push({ id: d.id || 'n' + Date.now(), fecha: fecha, hora: horaLocal(ahora),
         puesto: d.puesto, servicio: d.servicio, monto: Math.round(d.monto), medio: d.medio, propina: Math.round(d.propina || 0), medioPropina: d.propina ? d.medioPropina : '' });
       return api.getEstado();
     },
@@ -792,6 +982,7 @@ var Demo = (function () {
     adminHoraCierre: function (pin, h) { checkPin(pin); db.horaCierre = h; return config(); }
   };
   api.rubro = rubro;
+  api.offline = false;
   return api;
 })();
 

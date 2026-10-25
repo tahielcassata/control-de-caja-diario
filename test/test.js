@@ -123,13 +123,13 @@ prueba('cierre automático por activador (también de madrugada)', () => {
   gas.guardarCobro(cobro());
   env.setAhora(new Date('2026-10-21T23:30:00-03:00'));
   gas.cierreAutomatico();
-  assert.strictEqual(props.get('CERRADO_2026-10-21'), 'Automático');
+  assert(props.get('CERRADO_2026-10-21').startsWith('Automático|'));
   // madrugada: cierra el día anterior
   env.setAhora(new Date('2026-10-22T12:00:00-03:00'));
   gas.guardarCobro(cobro());
   env.setAhora(new Date('2026-10-23T01:30:00-03:00'));
   gas.cierreAutomatico();
-  assert.strictEqual(props.get('CERRADO_2026-10-22'), 'Automático');
+  assert(props.get('CERRADO_2026-10-22').startsWith('Automático|'));
 });
 
 prueba('sin PIN asignado no se puede entrar a administración', () => {
@@ -221,6 +221,64 @@ prueba('bloqueo después de 5 PIN incorrectos', () => {
   const { gas } = crearEntorno(); preparar(gas);
   for (let i = 0; i < 5; i++) lanza(() => gas.adminEntrar('0000'), 'PIN incorrecto');
   lanza(() => gas.adminEntrar('1234'), 'Demasiados intentos');
+});
+
+prueba('sin internet: el mismo cobro reintentado se guarda una sola vez', () => {
+  const { gas, hojas } = crearEntorno(); preparar(gas);
+  const c = cobro({ id: 'tablet-abc12345', cuando: '2026-10-21T14:58:00-03:00' });
+  gas.guardarCobro(c);
+  const e = gas.guardarCobro(c); // reintento
+  assert.strictEqual(e.duplicado, true);
+  assert.strictEqual(e.resumen.atenciones, 1);
+  assert.strictEqual(hojas.get('Cobros').datos.length, 2); // encabezado + 1
+  lanza(() => gas.guardarCobro(cobro({ id: 'mal id!' })), 'inválido');
+});
+
+prueba('sin internet: respeta la hora real del cobro', () => {
+  const env = crearEntorno(); const { gas } = env; preparar(gas);
+  env.setAhora(new Date('2026-10-21T19:30:00-03:00'));
+  const e = gas.guardarCobro(cobro({ id: 'tablet-hora0001', cuando: '2026-10-21T18:05:00-03:00' }));
+  assert.strictEqual(e.ultimos[0].hora, '18:05');
+  // hora futura o absurda: usa la actual
+  const f = gas.guardarCobro(cobro({ id: 'tablet-hora0002', cuando: '2030-01-01T10:00:00-03:00' }));
+  assert.strictEqual(f.ultimos[0].hora, '19:30');
+});
+
+prueba('sin internet: cobro de antes del cierre automático recalcula el cierre', () => {
+  const env = crearEntorno(); const { gas, hojas } = env; preparar(gas);
+  gas.guardarCobro(cobro()); // 15:00, se subió bien
+  env.setAhora(new Date('2026-10-21T23:30:00-03:00'));
+  gas.cierreAutomatico();
+  assert.strictEqual(gas.getCierre('2026-10-21').resumen.total, 8000);
+  // vuelve internet al otro día y sube un cobro de las 20:00 de ayer
+  env.setAhora(new Date('2026-10-22T09:00:00-03:00'));
+  gas.guardarCobro(cobro({ id: 'tablet-tarde001', puesto: 5, monto: 12000, servicio: 'Corte y barba', cuando: '2026-10-21T20:00:00-03:00' }));
+  const ayer = gas.getCierre('2026-10-21');
+  assert.strictEqual(ayer.cerrado, true);
+  assert.strictEqual(ayer.resumen.total, 20000);
+  assert.strictEqual(ayer.resumen.atenciones, 2);
+  const totales = hojas.get('Cierres').datos.filter(f => f[0] === '2026-10-21' && f[1] === 'TOTAL');
+  assert.strictEqual(totales.length, 1, 'no duplica el cierre');
+  assert.strictEqual(gas.getEstado().resumen.total, 0, 'hoy no se toca');
+});
+
+prueba('día cerrado a mano: rechaza cobros nuevos pero acepta los pendientes de antes', () => {
+  const env = crearEntorno(); const { gas } = env; preparar(gas);
+  env.setAhora(new Date('2026-10-21T20:00:00-03:00'));
+  gas.cerrarDia();
+  lanza(() => gas.guardarCobro(cobro({ id: 'tablet-nuevo001' })), 'cerrado');
+  const e = gas.guardarCobro(cobro({ id: 'tablet-viejo001', cuando: '2026-10-21T19:40:00-03:00' }));
+  assert.strictEqual(gas.getCierre('2026-10-21').resumen.atenciones, 1);
+  assert.strictEqual(e.cerrado, true);
+});
+
+prueba('sin internet: guarda aunque el servicio se haya desactivado en el medio', () => {
+  const env = crearEntorno(); const { gas } = env; preparar(gas);
+  gas.adminGuardarServicio('1234', { original: 'Color', nombre: 'Color', precio: 15000, activo: false });
+  env.setAhora(new Date('2026-10-21T16:00:00-03:00'));
+  lanza(() => gas.guardarCobro(cobro({ servicio: 'Color', monto: 15000 })), 'servicio');
+  gas.guardarCobro(cobro({ id: 'tablet-color001', servicio: 'Color', monto: 15000, cuando: '2026-10-21T15:30:00-03:00' }));
+  assert.strictEqual(gas.getEstado().resumen.total, 15000);
 });
 
 prueba('rinde con un año de historial (110.000 cobros)', () => {

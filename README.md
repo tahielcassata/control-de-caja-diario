@@ -4,7 +4,7 @@
 
 Funciona con **Google Apps Script + Google Sheets**: no necesita servidor ni base de datos, y no tiene costos de plataforma. Los datos quedan en una planilla de Google de la cuenta del local.
 
-> **Demo:** abrí `docs/index.html` en el navegador (o la versión publicada en GitHub Pages). Funciona en modo demostración con datos de ejemplo. PIN de administración: `1234`. Arriba se elige el rubro del ejemplo (también con `?rubro=Uñas`), y con `?vacio` se ve como recién instalado.
+> **Demo:** abrí `docs/index.html` en el navegador (o la versión publicada en GitHub Pages). Funciona en modo demostración con datos de ejemplo. PIN de administración: `1234`. Tiene un botón para simular un corte de internet. Arriba se elige el rubro del ejemplo (también con `?rubro=Uñas`), y con `?vacio` se ve como recién instalado.
 
 ## Funciones
 
@@ -30,6 +30,13 @@ Funciona con **Google Apps Script + Google Sheets**: no necesita servidor ni bas
 - Configurar la hora del cierre automático.
 - El **PIN lo asigna el instalador** desde la planilla (menú *Control de caja → Asignar PIN del cliente*), y desde ahí también se resetea si el cliente se lo olvida. Se guarda con hash SHA-256 y sal, y se bloquea por 5 minutos después de 5 intentos fallidos.
 
+**Funciona sin internet**
+- Si se corta la conexión con la app abierta, se sigue cobrando normal: cada cobro se guarda en la tablet y se sube solo cuando vuelve internet.
+- Un aviso muestra cuántos cobros quedan sin subir, y los totales del día ya los incluyen.
+- Cada cobro lleva un código único y la hora real: si se reintenta no se duplica, y queda registrado a la hora en que se cobró.
+- Si el cierre automático pasó durante el corte, al subir esos cobros el cierre de ese día se recalcula solo.
+- Para abrir la app desde cero sí hace falta internet (la sirve Google).
+
 **Diseño adaptativo**: el mismo código se ve bien en tablet, celular y PC.
 
 ## Arquitectura
@@ -49,6 +56,7 @@ Tablet / celu / PC  ──►  Web app (index.html)
 ```
 
 - **Concurrencia:** cada escritura usa `LockService` para que dos cargas simultáneas no se pisen.
+- **Sin conexión:** cola de cobros en `localStorage`, subida en orden e idempotente (id único por cobro), con reintentos automáticos.
 - **Rendimiento:** la hoja de cobros se lee de abajo hacia arriba en bloques y se corta al llegar a fechas anteriores. Con 360 cobros por día y un año de historial (más de 100.000 filas) la pantalla sigue respondiendo rápido.
 - **Protección:** las hojas Cobros y Cierres tienen protección con aviso, para que no se editen sin querer.
 - **Seguridad de acceso:** la web app se publica con acceso "Solo yo" y se usa con la tablet logueada en la cuenta del local. Las funciones de administración piden PIN.
@@ -75,7 +83,7 @@ El backend se prueba en Node con un simulador de las APIs de Google:
 npm test
 ```
 
-Cubre: carga y validación de cobros, propinas en distinto medio, deshacer, cierre manual y automático, reapertura con PIN, cambio de día, administración, bloqueo de PIN y rendimiento con un año de historial.
+Cubre: carga y validación de cobros, cobros sin internet (duplicados, hora real, recálculo de cierres), propinas en distinto medio, deshacer, cierre manual y automático, reapertura con PIN, cambio de día, administración, bloqueo de PIN y rendimiento con un año de historial.
 
 ## Instalación para un cliente
 
