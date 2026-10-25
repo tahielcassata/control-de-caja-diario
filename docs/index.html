@@ -380,7 +380,7 @@ function ir(vista) {
 
 function bannerDemo() {
   if (!MODO_DEMO) return '';
-  var h = '<div class="banner demo">Modo demostración: los datos son de ejemplo y no se guardan. PIN de administración: 1234.' +
+  var h = '<div class="banner demo">Modo demostración: los datos son de ejemplo y no se guardan. PIN de administración: 482916.' +
           '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span style="opacity:.8">Ver ejemplo de:</span>';
   Object.keys(RUBROS_DEMO).forEach(function (r) {
     var on = r === Demo.rubro;
@@ -759,6 +759,7 @@ function entrarAdmin() {
   $('entrar').disabled = true;
   api('adminEntrar', pin).then(function (a) {
     S.pin = pin; S.admin = a; S.msg = null; renderAdmin();
+    vigilarInactividad();
   }).catch(function (e) {
     $('entrar').disabled = false;
     $('pinAdmin').value = '';
@@ -766,7 +767,29 @@ function entrarAdmin() {
   });
 }
 
+/* Si el dueño se olvida de salir, Administración se cierra sola a los 2 minutos sin uso. */
+var MINUTOS_ADMIN = 2;
+var ultimaActividad = Date.now();
+var vigilancia = null;
+['click', 'keydown', 'input', 'touchstart'].forEach(function (ev) {
+  document.addEventListener(ev, function () { ultimaActividad = Date.now(); }, true);
+});
+function vigilarInactividad() {
+  ultimaActividad = Date.now();
+  if (vigilancia) clearInterval(vigilancia);
+  vigilancia = setInterval(function () {
+    if (!S.pin) { clearInterval(vigilancia); vigilancia = null; return; }
+    if (Date.now() - ultimaActividad > MINUTOS_ADMIN * 60 * 1000) {
+      clearInterval(vigilancia); vigilancia = null;
+      cerrarModal();
+      salirAdmin();
+      S.msg = { tipo: 'aviso', texto: 'Administración se cerró sola por inactividad.' };
+    }
+  }, 5000);
+}
+
 function salirAdmin() {
+  if (vigilancia) { clearInterval(vigilancia); vigilancia = null; }
   S.pin = null;
   S.admin = null;
   // Puede haber cambiado puestos o precios: no mostrar datos viejos.
@@ -877,7 +900,7 @@ var Demo = (function () {
   if (!RUBROS_DEMO[rubro]) rubro = 'Barbería';
   function hoyStr() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   var db = {
-    pin: '1234', horaCierre: 23, nombre: NOMBRES_DEMO[rubro],
+    pin: '482916', horaCierre: 23, nombre: NOMBRES_DEMO[rubro],
     puestos: [], servicios: RUBROS_DEMO[rubro].map(function (s) { return { nombre: s[0], precio: s[1], activo: true }; }),
     cobros: [], cerrados: {}
   };

@@ -29,7 +29,9 @@ var MEDIOS = ['Efectivo', 'Transferencia'];
 var HORA_CIERRE_INICIAL = 23;
 var MONTO_MAXIMO = 10000000;
 var BLOQUE_LECTURA = 2000;
-var MAX_INTENTOS_PIN = 5;
+var INTENTOS_POR_BLOQUEO = 5;
+// Cada 5 intentos fallidos seguidos el bloqueo es más largo: 5 minutos, 1 hora, 24 horas.
+var BLOQUEOS_PIN_MIN = [5, 60, 24 * 60];
 var NOMBRE_INICIAL = 'Control de caja diario';
 
 /** Servicios típicos por rubro, para cargar de una vez desde Administración. Precios de ejemplo. */
@@ -107,7 +109,7 @@ function setup() {
  */
 function asignarPinCliente() {
   var ui = SpreadsheetApp.getUi();
-  var r = ui.prompt('Asignar PIN del cliente', 'Entre 4 y 8 números. Es el PIN para entrar a Administración.', ui.ButtonSet.OK_CANCEL);
+  var r = ui.prompt('Asignar PIN del cliente', 'Entre 6 y 8 números, al azar (no uses 123456 ni fechas). Es el PIN para entrar a Administración.', ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
   try {
     asignarPin_(r.getResponseText().trim());
@@ -119,9 +121,23 @@ function asignarPinCliente() {
 
 function asignarPin_(pin) {
   pin = String(pin || '');
-  if (!/^\d{4,8}$/.test(pin)) throw new Error('El PIN tiene que tener entre 4 y 8 números.');
+  if (!/^\d{6,8}$/.test(pin)) throw new Error('El PIN tiene que tener entre 6 y 8 números.');
+  if (esPinDebil(pin)) throw new Error('Ese PIN es muy fácil de adivinar. Usá números al azar.');
   guardarPin_(pin);
-  CacheService.getScriptCache().remove('PIN_INTENTOS');
+  PropertiesService.getScriptProperties().deleteProperty('PIN_FALLOS');
+  PropertiesService.getScriptProperties().deleteProperty('PIN_BLOQUEO_HASTA');
+}
+
+/** Rechaza PIN obvios: todos iguales (111111) o en escalera (123456, 987654). */
+function esPinDebil(pin) {
+  if (/^(\d)\1+$/.test(pin)) return true;
+  var sube = true, baja = true;
+  for (var i = 1; i < pin.length; i++) {
+    var d = Number(pin[i]) - Number(pin[i - 1]);
+    if (d !== 1 && d !== -9) sube = false;
+    if (d !== -1 && d !== 9) baja = false;
+  }
+  return sube || baja;
 }
 
 function crearHoja_(ss, nombre, columnas) {
@@ -665,17 +681,33 @@ function adminConfig_() {
 // ───────────────────────── PIN ─────────────────────────
 
 function verificarPin_(pin) {
-  var cache = CacheService.getScriptCache();
-  var intentos = Number(cache.get('PIN_INTENTOS') || 0);
-  if (intentos >= MAX_INTENTOS_PIN) throw new Error('Demasiados intentos. Esperá 5 minutos.');
   var props = PropertiesService.getScriptProperties();
+  var hasta = Number(props.getProperty('PIN_BLOQUEO_HASTA') || 0);
+  var ahora = Date.now();
+  if (hasta > ahora) throw new Error('Demasiados intentos. Probá de nuevo en ' + duracionTexto_(hasta - ahora) + '.');
   if (!props.getProperty('PIN_HASH')) throw new Error('Todavía no hay un PIN asignado. Pedíselo a quien instaló el sistema.');
   var ok = hashPin_(String(pin || ''), props.getProperty('PIN_SALT')) === props.getProperty('PIN_HASH');
-  if (!ok) {
-    cache.put('PIN_INTENTOS', String(intentos + 1), 300);
-    throw new Error('PIN incorrecto.');
+  if (ok) {
+    props.deleteProperty('PIN_FALLOS');
+    props.deleteProperty('PIN_BLOQUEO_HASTA');
+    return;
   }
-  cache.remove('PIN_INTENTOS');
+  var fallos = Number(props.getProperty('PIN_FALLOS') || 0) + 1;
+  props.setProperty('PIN_FALLOS', String(fallos));
+  if (fallos % INTENTOS_POR_BLOQUEO === 0) {
+    var nivel = Math.min(fallos / INTENTOS_POR_BLOQUEO, BLOQUEOS_PIN_MIN.length) - 1;
+    var minutos = BLOQUEOS_PIN_MIN[nivel];
+    props.setProperty('PIN_BLOQUEO_HASTA', String(ahora + minutos * 60 * 1000));
+    throw new Error('PIN incorrecto. Por seguridad, Administración queda bloqueada ' + duracionTexto_(minutos * 60 * 1000) + '.');
+  }
+  throw new Error('PIN incorrecto.');
+}
+
+function duracionTexto_(ms) {
+  var min = Math.ceil(ms / 60000);
+  if (min < 60) return min + (min === 1 ? ' minuto' : ' minutos');
+  var h = Math.ceil(min / 60);
+  return h + (h === 1 ? ' hora' : ' horas');
 }
 
 function guardarPin_(pin) {

@@ -4,7 +4,7 @@
 
 Funciona con **Google Apps Script + Google Sheets**: no necesita servidor ni base de datos, y no tiene costos de plataforma. Los datos quedan en una planilla de Google de la cuenta del local.
 
-> **Demo:** abrí `docs/index.html` en el navegador (o la versión publicada en GitHub Pages). Funciona en modo demostración con datos de ejemplo. PIN de administración: `1234`. Tiene un botón para simular un corte de internet. Arriba se elige el rubro del ejemplo (también con `?rubro=Uñas`), y con `?vacio` se ve como recién instalado.
+> **Demo:** abrí `docs/index.html` en el navegador (o la versión publicada en GitHub Pages). Funciona en modo demostración con datos de ejemplo. PIN de administración: `482916`. Tiene un botón para simular un corte de internet. Arriba se elige el rubro del ejemplo (también con `?rubro=Uñas`), y con `?vacio` se ve como recién instalado.
 
 ## Funciones
 
@@ -28,7 +28,7 @@ Funciona con **Google Apps Script + Google Sheets**: no necesita servidor ni bas
 - Agregar puestos de trabajo y activar o desactivar los existentes (el historial no se pierde).
 - Agregar servicios, cambiar nombres y precios, o desactivarlos. Los cambios de precio no tocan los cobros ni los cierres anteriores.
 - Configurar la hora del cierre automático.
-- El **PIN lo asigna el instalador** desde la planilla (menú *Control de caja → Asignar PIN del cliente*), y desde ahí también se resetea si el cliente se lo olvida. Se guarda con hash SHA-256 y sal, y se bloquea por 5 minutos después de 5 intentos fallidos.
+- El **PIN lo asigna el instalador** desde la planilla (menú *Control de caja → Asignar PIN del cliente*), y desde ahí también se resetea si el cliente se lo olvida. Tiene entre 6 y 8 números y no acepta PIN obvios (123456, 111111). Se guarda con hash SHA-256 y sal. Cada 5 intentos fallidos se bloquea, cada vez por más tiempo: 5 minutos, 1 hora y 24 horas. Administración se cierra sola a los 2 minutos sin uso.
 
 **Funciona sin internet**
 - Si se corta la conexión con la app abierta, se sigue cobrando normal: cada cobro se guarda en la tablet y se sube solo cuando vuelve internet.
