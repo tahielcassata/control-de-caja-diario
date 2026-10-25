@@ -511,7 +511,6 @@ function renderAdmin() {
   }
 
   var a = S.admin;
-  if (a.pinDeFabrica) h += '<div class="banner aviso" style="margin-bottom:16px"><b>Cambiá el PIN de fábrica.</b> Todavía es 1234 y cualquiera podría cambiar los precios.</div>';
   h += '<div id="msg" class="msg" style="margin-top:0"></div>';
 
   // Puestos
@@ -540,12 +539,6 @@ function renderAdmin() {
   h += '<div class="tarjeta seccion"><h2>Cierre automático</h2><p class="ayuda">Si nadie toca «Cerrar día», el sistema cierra solo a esta hora.</p><div class="linea"><select class="campo" id="horaCierre" style="max-width:160px">';
   for (var hh = 0; hh < 24; hh++) h += '<option value="' + hh + '"' + (hh === a.horaCierre ? ' selected' : '') + '>' + ('0' + hh).slice(-2) + ':30</option>';
   h += '</select><button class="btn prim" onclick="guardarHora()">Guardar</button></div></div>';
-
-  // PIN
-  h += '<div class="tarjeta seccion"><h2>Cambiar PIN</h2><p class="ayuda">Entre 4 y 8 números. Solo lo debería saber el dueño.</p><div class="linea">' +
-       '<input class="campo" id="pin1" type="password" inputmode="numeric" maxlength="8" placeholder="PIN nuevo">' +
-       '<input class="campo" id="pin2" type="password" inputmode="numeric" maxlength="8" placeholder="Repetir PIN">' +
-       '<button class="btn prim" onclick="cambiarPin()">Cambiar</button></div></div>';
 
   $('app').innerHTML = h;
   pintarMsg();
@@ -613,13 +606,6 @@ function agregarServicio() {
 function guardarHora() {
   accionAdmin(api('adminHoraCierre', S.pin, Number($('horaCierre').value)), 'Hora de cierre automático guardada.');
 }
-function cambiarPin() {
-  var p1 = $('pin1').value, p2 = $('pin2').value;
-  if (!/^\d{4,8}$/.test(p1)) { S.msg = { tipo: 'error', texto: 'El PIN tiene que tener entre 4 y 8 números.' }; pintarMsg(); window.scrollTo(0, 0); return; }
-  if (p1 !== p2) { S.msg = { tipo: 'error', texto: 'Los dos PIN no coinciden.' }; pintarMsg(); window.scrollTo(0, 0); return; }
-  accionAdmin(api('adminCambiarPin', S.pin, p1).then(function (a) { S.pin = p1; return a; }), 'PIN cambiado.');
-}
-
 /* ═════════════════════ Ventanas de confirmación ═════════════════════ */
 function confirmar(titulo, texto, boton, alAceptar) {
   $('capa').innerHTML = '<div class="capa" onclick="if(event.target===this)cerrarModal()"><div class="modal" role="dialog" aria-modal="true">' +
@@ -658,7 +644,7 @@ function cerrarModal() { $('capa').innerHTML = ''; }
 var Demo = (function () {
   function hoyStr() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   var db = {
-    pin: '1234', pinDeFabrica: true, horaCierre: 23,
+    pin: '1234', horaCierre: 23,
     puestos: [], servicios: [
       { nombre: 'Corte', precio: 8000, activo: true },
       { nombre: 'Barba', precio: 5000, activo: true },
@@ -708,7 +694,7 @@ var Demo = (function () {
     return r;
   }
   function checkPin(pin) { if (pin !== db.pin) throw new Error('PIN incorrecto.'); }
-  function config() { return { puestos: db.puestos, servicios: db.servicios, horaCierre: db.horaCierre, pinDeFabrica: db.pinDeFabrica }; }
+  function config() { return { puestos: db.puestos, servicios: db.servicios, horaCierre: db.horaCierre }; }
 
   var api = {
     getEstado: function () {
@@ -754,7 +740,6 @@ var Demo = (function () {
       else db.servicios.push({ nombre: nombre, precio: Math.round(d.precio), activo: true });
       return config();
     },
-    adminCambiarPin: function (pin, nuevo) { checkPin(pin); if (nuevo === '1234') throw new Error('Elegí un PIN distinto al de fábrica.'); db.pin = nuevo; db.pinDeFabrica = false; return config(); },
     adminHoraCierre: function (pin, h) { checkPin(pin); db.horaCierre = h; return config(); }
   };
   return api;

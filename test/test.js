@@ -16,7 +16,7 @@ const cobro = (o = {}) => Object.assign({ puesto: 1, servicio: 'Corte', monto: 8
 
 console.log('\nSistema de cobros — pruebas\n');
 
-prueba('setup crea hojas, puestos, servicios, PIN y activador', () => {
+prueba('setup crea hojas, puestos, servicios y activador', () => {
   const { gas, hojas, triggers } = crearEntorno();
   gas.setup();
   ['Cobros', 'Cierres', 'Puestos', 'Servicios'].forEach(h => assert(hojas.has(h), 'falta ' + h));
@@ -86,7 +86,7 @@ prueba('cerrar el día guarda el resumen y bloquea cargas y deshacer', () => {
 });
 
 prueba('reabrir con PIN permite cargar un cobro tarde y recalcula al cerrar', () => {
-  const { gas, hojas } = crearEntorno(); gas.setup();
+  const { gas, hojas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
   gas.guardarCobro(cobro());
   gas.cerrarDia();
   lanza(() => gas.reabrirDia('0000', '2026-10-21'), 'PIN incorrecto');
@@ -124,11 +124,30 @@ prueba('cierre automático por activador (también de madrugada)', () => {
   assert.strictEqual(props.get('CERRADO_2026-10-22'), 'Automático');
 });
 
-prueba('administración: PIN, puestos y servicios', () => {
+prueba('sin PIN asignado no se puede entrar a administración', () => {
   const { gas } = crearEntorno(); gas.setup();
+  lanza(() => gas.adminEntrar('1234'), 'Todavía no hay un PIN');
+  lanza(() => gas.reabrirDia('1234', '2026-10-21'), 'Todavía no hay un PIN');
+});
+
+prueba('el instalador asigna y resetea el PIN del cliente', () => {
+  const { gas } = crearEntorno(); gas.setup();
+  lanza(() => gas.asignarPin_('12'), 'entre 4 y 8');
+  lanza(() => gas.asignarPin_('12ab'), 'entre 4 y 8');
+  gas.asignarPin_('5739');
+  gas.adminEntrar('5739');
+  for (let i = 0; i < 5; i++) lanza(() => gas.adminEntrar('0000'), 'PIN incorrecto');
+  lanza(() => gas.adminEntrar('5739'), 'Demasiados intentos');
+  gas.asignarPin_('8642'); // reset: también destraba el bloqueo
+  lanza(() => gas.adminEntrar('5739'), 'PIN incorrecto');
+  gas.adminEntrar('8642');
+  assert.strictEqual(typeof gas.adminCambiarPin, 'undefined', 'el cliente no debe poder cambiar el PIN');
+});
+
+prueba('administración: puestos y servicios', () => {
+  const { gas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
   lanza(() => gas.adminEntrar('9999'), 'PIN incorrecto');
   let a = gas.adminEntrar('1234');
-  assert.strictEqual(a.pinDeFabrica, true);
 
   a = gas.adminAgregarPuesto('1234');
   assert.strictEqual(a.puestos.length, 11);
@@ -143,24 +162,17 @@ prueba('administración: PIN, puestos y servicios', () => {
   const sv = gas.getEstado().servicios;
   assert.strictEqual(sv.find(s => s.nombre === 'Corte').precio, 9000);
   assert(sv.some(s => s.nombre === 'Cejas'));
-
-  lanza(() => gas.adminCambiarPin('1234', '12'), 'entre 4 y 8');
-  lanza(() => gas.adminCambiarPin('1234', '1234'), 'distinto');
-  a = gas.adminCambiarPin('1234', '4321');
-  assert.strictEqual(a.pinDeFabrica, false);
-  lanza(() => gas.adminEntrar('1234'), 'PIN incorrecto');
-  gas.adminEntrar('4321');
 });
 
 prueba('cambiar un precio no modifica cobros anteriores', () => {
-  const { gas } = crearEntorno(); gas.setup();
+  const { gas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
   gas.guardarCobro(cobro());
   gas.adminGuardarServicio('1234', { original: 'Corte', nombre: 'Corte', precio: 10000, activo: true });
   assert.strictEqual(gas.getEstado().resumen.total, 8000);
 });
 
 prueba('bloqueo después de 5 PIN incorrectos', () => {
-  const { gas } = crearEntorno(); gas.setup();
+  const { gas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
   for (let i = 0; i < 5; i++) lanza(() => gas.adminEntrar('0000'), 'PIN incorrecto');
   lanza(() => gas.adminEntrar('1234'), 'Demasiados intentos');
 });

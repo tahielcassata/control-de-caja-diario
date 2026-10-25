@@ -9,7 +9,7 @@
  *   Servicios  → servicios, precio y si está activo
  *
  * Configuración guardada en Script Properties:
- *   PIN_HASH, PIN_SALT, PIN_DEFAULT, HORA_CIERRE, CERRADO_<yyyy-MM-dd>
+ *   PIN_HASH, PIN_SALT, HORA_CIERRE, CERRADO_<yyyy-MM-dd>
  */
 
 // ───────────────────────── Constantes ─────────────────────────
@@ -25,7 +25,6 @@ var COLS_PUESTOS = ['Puesto', 'Activo'];
 var COLS_SERVICIOS = ['Servicio', 'Precio', 'Activo'];
 
 var MEDIOS = ['Efectivo', 'Transferencia'];
-var PIN_INICIAL = '1234';
 var HORA_CIERRE_INICIAL = 23;
 var MONTO_MAXIMO = 10000000;
 var BLOQUE_LECTURA = 2000;
@@ -45,6 +44,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Cobros')
     .addItem('Configurar sistema (primera vez)', 'setup')
+    .addItem('Asignar PIN del cliente', 'asignarPinCliente')
     .addToUi();
 }
 
@@ -87,14 +87,37 @@ function setup() {
     ]);
   }
 
-  if (!props.getProperty('PIN_HASH')) guardarPin_(PIN_INICIAL, true);
   if (!props.getProperty('HORA_CIERRE')) props.setProperty('HORA_CIERRE', String(HORA_CIERRE_INICIAL));
   instalarCierreAutomatico_(Number(props.getProperty('HORA_CIERRE')));
 
   var hoja1 = ss.getSheetByName('Hoja 1') || ss.getSheetByName('Sheet1');
   if (hoja1 && hoja1.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(hoja1);
 
-  return 'Listo. PIN inicial: ' + PIN_INICIAL + ' (cambialo desde Administración).';
+  return 'Listo. Ahora asigná el PIN del cliente desde el menú Cobros → Asignar PIN del cliente.';
+}
+
+/**
+ * Lo usa el instalador desde la planilla: menú Cobros → Asignar PIN del cliente.
+ * Sirve para el PIN inicial y para resetearlo si el cliente se lo olvida.
+ * No se puede llamar desde la web app (necesita la interfaz de la planilla).
+ */
+function asignarPinCliente() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.prompt('Asignar PIN del cliente', 'Entre 4 y 8 números. Es el PIN para entrar a Administración.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  try {
+    asignarPin_(r.getResponseText().trim());
+    ui.alert('PIN asignado. Pasáselo al dueño del local.');
+  } catch (e) {
+    ui.alert(e.message);
+  }
+}
+
+function asignarPin_(pin) {
+  pin = String(pin || '');
+  if (!/^\d{4,8}$/.test(pin)) throw new Error('El PIN tiene que tener entre 4 y 8 números.');
+  guardarPin_(pin);
+  CacheService.getScriptCache().remove('PIN_INTENTOS');
 }
 
 function crearHoja_(ss, nombre, columnas) {
@@ -287,15 +310,6 @@ function adminGuardarServicio(pin, datos) {
   if (original && filaOriginal === -1) throw new Error('No se encontró el servicio "' + datos.original + '".');
   if (filaOriginal >= 0) hoja.getRange(filaOriginal + 2, 1, 1, 3).setValues([[nombre, precio, activo]]);
   else hoja.appendRow([nombre, precio, activo]);
-  return adminConfig_();
-}
-
-function adminCambiarPin(pin, nuevo) {
-  verificarPin_(pin);
-  nuevo = String(nuevo || '');
-  if (!/^\d{4,8}$/.test(nuevo)) throw new Error('El PIN tiene que tener entre 4 y 8 números.');
-  if (nuevo === PIN_INICIAL) throw new Error('Elegí un PIN distinto al de fábrica.');
-  guardarPin_(nuevo, false);
   return adminConfig_();
 }
 
@@ -540,8 +554,7 @@ function adminConfig_() {
   return {
     puestos: leerPuestos_(),
     servicios: leerServicios_(),
-    horaCierre: Number(props.getProperty('HORA_CIERRE') || HORA_CIERRE_INICIAL),
-    pinDeFabrica: props.getProperty('PIN_DEFAULT') === 'true'
+    horaCierre: Number(props.getProperty('HORA_CIERRE') || HORA_CIERRE_INICIAL)
   };
 }
 
@@ -552,6 +565,7 @@ function verificarPin_(pin) {
   var intentos = Number(cache.get('PIN_INTENTOS') || 0);
   if (intentos >= MAX_INTENTOS_PIN) throw new Error('Demasiados intentos. Esperá 5 minutos.');
   var props = PropertiesService.getScriptProperties();
+  if (!props.getProperty('PIN_HASH')) throw new Error('Todavía no hay un PIN asignado. Pedíselo a quien instaló el sistema.');
   var ok = hashPin_(String(pin || ''), props.getProperty('PIN_SALT')) === props.getProperty('PIN_HASH');
   if (!ok) {
     cache.put('PIN_INTENTOS', String(intentos + 1), 300);
@@ -560,13 +574,11 @@ function verificarPin_(pin) {
   cache.remove('PIN_INTENTOS');
 }
 
-function guardarPin_(pin, deFabrica) {
+function guardarPin_(pin) {
   var salt = Utilities.getUuid();
-  var props = PropertiesService.getScriptProperties();
-  props.setProperties({
+  PropertiesService.getScriptProperties().setProperties({
     PIN_SALT: salt,
-    PIN_HASH: hashPin_(pin, salt),
-    PIN_DEFAULT: deFabrica ? 'true' : 'false'
+    PIN_HASH: hashPin_(pin, salt)
   });
 }
 
