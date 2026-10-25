@@ -1,7 +1,7 @@
 {
   "name": "control-de-caja-diario",
   "version": "1.0.0",
-  "description": "Control de caja diario: sistema de cobros para barberías con Google Apps Script y Google Sheets",
+  "description": "Control de caja diario: sistema de cobros para negocios de servicios con Google Apps Script y Google Sheets",
   "private": true,
   "scripts": {
     "test": "node test/test.js",

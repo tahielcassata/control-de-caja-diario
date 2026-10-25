@@ -1,6 +1,6 @@
 /**
  * Control de caja diario
- * Sistema de cobros para barberías.
+ * Sistema de cobros para negocios de servicios (barberías, peluquerías, uñas, estética…).
  * Backend en Google Apps Script + Google Sheets.
  *
  * Hojas que usa (las crea `setup()`):
@@ -10,7 +10,7 @@
  *   Servicios  → servicios, precio y si está activo
  *
  * Configuración guardada en Script Properties:
- *   PIN_HASH, PIN_SALT, HORA_CIERRE, CERRADO_<yyyy-MM-dd>
+ *   PIN_HASH, PIN_SALT, HORA_CIERRE, NOMBRE_NEGOCIO, CERRADO_<yyyy-MM-dd>
  */
 
 // ───────────────────────── Constantes ─────────────────────────
@@ -21,7 +21,7 @@ var HOJA_PUESTOS = 'Puestos';
 var HOJA_SERVICIOS = 'Servicios';
 
 var COLS_COBROS = ['ID', 'Fecha', 'Hora', 'Puesto', 'Servicio', 'Monto', 'Medio', 'Propina', 'Medio propina', 'Registrado'];
-var COLS_CIERRES = ['Fecha', 'Puesto', 'Cortes', 'Servicios', 'Propinas', 'Efectivo', 'Transferencias', 'Total', 'Tipo', 'Cerrado el'];
+var COLS_CIERRES = ['Fecha', 'Puesto', 'Atenciones', 'Cobrado', 'Propinas', 'Efectivo', 'Transferencias', 'Total', 'Tipo', 'Cerrado el'];
 var COLS_PUESTOS = ['Puesto', 'Activo'];
 var COLS_SERVICIOS = ['Servicio', 'Precio', 'Activo'];
 
@@ -30,6 +30,7 @@ var HORA_CIERRE_INICIAL = 23;
 var MONTO_MAXIMO = 10000000;
 var BLOQUE_LECTURA = 2000;
 var MAX_INTENTOS_PIN = 5;
+var NOMBRE_INICIAL = 'Control de caja diario';
 
 // ───────────────────────── Web app ─────────────────────────
 
@@ -161,6 +162,7 @@ function getEstado() {
   var puestos = leerPuestos_();
   var resumen = calcularResumen(cobros, puestos.filter(function (p) { return p.activo; }).map(function (p) { return p.numero; }));
   return {
+    nombre: nombreNegocio_(),
     hoy: hoy,
     cerrado: estaCerrado_(hoy),
     puestos: puestos.filter(function (p) { return p.activo; }).map(function (p) { return p.numero; }),
@@ -323,6 +325,17 @@ function adminHoraCierre(pin, hora) {
   return adminConfig_();
 }
 
+/** Nombre que aparece arriba de la pantalla (por ejemplo, el nombre del local). */
+function adminNombreNegocio(pin, nombre) {
+  verificarPin_(pin);
+  nombre = String(nombre || '').trim();
+  if (nombre.length > 40) throw new Error('El nombre es muy largo (máximo 40 letras).');
+  var props = PropertiesService.getScriptProperties();
+  if (nombre) props.setProperty('NOMBRE_NEGOCIO', nombre);
+  else props.deleteProperty('NOMBRE_NEGOCIO');
+  return adminConfig_();
+}
+
 /** Reabre un día cerrado para cargar un cobro tarde. Al volver a cerrar se recalcula. */
 function reabrirDia(pin, fecha) {
   verificarPin_(pin);
@@ -349,16 +362,16 @@ function reabrirDia(pin, fecha) {
 function calcularResumen(cobros, puestos) {
   var porPuesto = {};
   (puestos || []).forEach(function (n) { porPuesto[n] = filaVacia_(n); });
-  var r = { cortes: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0, total: 0 };
+  var r = { atenciones: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0, total: 0 };
 
   cobros.forEach(function (c) {
     var p = porPuesto[c.puesto] || (porPuesto[c.puesto] = filaVacia_(c.puesto));
     var monto = Number(c.monto) || 0;
     var propina = Number(c.propina) || 0;
-    p.cortes += 1;
+    p.atenciones += 1;
     p.servicios += monto;
     p.propinas += propina;
-    r.cortes += 1;
+    r.atenciones += 1;
     r.servicios += monto;
     r.propinas += propina;
     if (c.medio === 'Efectivo') { r.efectivo += monto; p.efectivo += monto; }
@@ -377,7 +390,7 @@ function calcularResumen(cobros, puestos) {
 }
 
 function filaVacia_(n) {
-  return { puesto: Number(n), cortes: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0 };
+  return { puesto: Number(n), atenciones: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0 };
 }
 
 /** Valida y normaliza un cobro. Lanza un Error con un mensaje para el usuario. */
@@ -417,7 +430,7 @@ function cerrarFecha_(fecha, tipo) {
   try {
     if (estaCerrado_(fecha)) return;
     var resumen = calcularResumen(cobrosDeFecha_(fecha), []);
-    if (resumen.cortes === 0 && tipo === 'Automático') {
+    if (resumen.atenciones === 0 && tipo === 'Automático') {
       // Día sin cobros (franco): se marca cerrado sin escribir filas.
       PropertiesService.getScriptProperties().setProperty('CERRADO_' + fecha, tipo);
       return;
@@ -425,9 +438,9 @@ function cerrarFecha_(fecha, tipo) {
     borrarCierreGuardado_(fecha);
     var ahora = new Date();
     var filas = resumen.porPuesto.map(function (p) {
-      return [fecha, p.puesto, p.cortes, p.servicios, p.propinas, p.efectivo, p.transferencias, p.efectivo + p.transferencias, tipo, ahora];
+      return [fecha, p.puesto, p.atenciones, p.servicios, p.propinas, p.efectivo, p.transferencias, p.efectivo + p.transferencias, tipo, ahora];
     });
-    filas.push([fecha, 'TOTAL', resumen.cortes, resumen.servicios, resumen.propinas, resumen.efectivo, resumen.transferencias, resumen.total, tipo, ahora]);
+    filas.push([fecha, 'TOTAL', resumen.atenciones, resumen.servicios, resumen.propinas, resumen.efectivo, resumen.transferencias, resumen.total, tipo, ahora]);
     var hoja = getHoja_(HOJA_CIERRES);
     hoja.getRange(hoja.getLastRow() + 1, 1, filas.length, COLS_CIERRES.length).setValues(filas);
     PropertiesService.getScriptProperties().setProperty('CERRADO_' + fecha, tipo);
@@ -454,11 +467,11 @@ function leerCierreGuardado_(fecha) {
   filas.forEach(function (f) {
     var v = f.valores;
     if (v[1] === 'TOTAL') {
-      r.cortes = Number(v[2]); r.servicios = Number(v[3]); r.propinas = Number(v[4]);
+      r.atenciones = Number(v[2]); r.servicios = Number(v[3]); r.propinas = Number(v[4]);
       r.efectivo = Number(v[5]); r.transferencias = Number(v[6]); r.total = Number(v[7]);
     } else {
       r.porPuesto.push({
-        puesto: Number(v[1]), cortes: Number(v[2]), servicios: Number(v[3]),
+        puesto: Number(v[1]), atenciones: Number(v[2]), servicios: Number(v[3]),
         propinas: Number(v[4]), efectivo: Number(v[5]), transferencias: Number(v[6])
       });
     }
@@ -555,7 +568,8 @@ function adminConfig_() {
   return {
     puestos: leerPuestos_(),
     servicios: leerServicios_(),
-    horaCierre: Number(props.getProperty('HORA_CIERRE') || HORA_CIERRE_INICIAL)
+    horaCierre: Number(props.getProperty('HORA_CIERRE') || HORA_CIERRE_INICIAL),
+    nombreNegocio: nombreNegocio_()
   };
 }
 
@@ -599,6 +613,10 @@ function getHoja_(nombre) {
   var hoja = getSS_().getSheetByName(nombre);
   if (!hoja) throw new Error('Falta la hoja "' + nombre + '". Ejecutá setup() desde el editor.');
   return hoja;
+}
+
+function nombreNegocio_() {
+  return PropertiesService.getScriptProperties().getProperty('NOMBRE_NEGOCIO') || NOMBRE_INICIAL;
 }
 
 function zona_() {

@@ -36,14 +36,14 @@ prueba('guardar cobros y calcular totales con propinas en distinto medio', () =>
   gas.guardarCobro(cobro({ puesto: 2, servicio: 'Corte y barba', monto: 12000, medio: 'Transferencia', propina: 1000, medioPropina: 'Efectivo' }));
   const e = gas.guardarCobro(cobro({ puesto: 1, servicio: 'Barba', monto: 5000, medio: 'Transferencia', propina: 2000, medioPropina: 'Transferencia' }));
   const r = e.resumen;
-  assert.strictEqual(r.cortes, 3);
+  assert.strictEqual(r.atenciones, 3);
   assert.strictEqual(r.servicios, 25000);
   assert.strictEqual(r.propinas, 3000);
   assert.strictEqual(r.efectivo, 9000);         // 8000 + propina 1000
   assert.strictEqual(r.transferencias, 19000);  // 12000 + 5000 + 2000
   assert.strictEqual(r.total, 28000);
   const p1 = r.porPuesto.find(p => p.puesto === 1);
-  assert.strictEqual(p1.cortes, 2); assert.strictEqual(p1.servicios, 13000); assert.strictEqual(p1.propinas, 2000);
+  assert.strictEqual(p1.atenciones, 2); assert.strictEqual(p1.servicios, 13000); assert.strictEqual(p1.propinas, 2000);
   assert.strictEqual(e.ultimos[0].servicio, 'Barba');
 });
 
@@ -54,7 +54,7 @@ prueba('validaciones del cobro', () => {
   lanza(() => gas.guardarCobro(cobro({ monto: 0 })), 'monto');
   lanza(() => gas.guardarCobro(cobro({ medio: 'Cheque' })), 'medio de pago');
   lanza(() => gas.guardarCobro(cobro({ propina: 500 })), 'medio de la propina');
-  assert.strictEqual(gas.getEstado().resumen.cortes, 0);
+  assert.strictEqual(gas.getEstado().resumen.atenciones, 0);
 });
 
 prueba('deshacer borra solo el último cobro de hoy', () => {
@@ -64,7 +64,7 @@ prueba('deshacer borra solo el último cobro de hoy', () => {
   gas.guardarCobro(cobro({ puesto: 3, monto: 9000 }));
   const e = gas.deshacerUltimo();
   assert.strictEqual(e.borrado.puesto, 3);
-  assert.strictEqual(e.resumen.cortes, 1);
+  assert.strictEqual(e.resumen.atenciones, 1);
   assert.strictEqual(e.resumen.total, 8000);
 });
 
@@ -164,6 +164,27 @@ prueba('administración: puestos y servicios', () => {
   assert(sv.some(s => s.nombre === 'Cejas'));
 });
 
+prueba('polirubro: renombrar servicios y nombre del negocio', () => {
+  const { gas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
+  gas.guardarCobro(cobro()); // un Corte de antes
+  gas.adminGuardarServicio('1234', { original: 'Corte', nombre: 'Uñas', precio: 7000, activo: true });
+  gas.adminGuardarServicio('1234', { original: 'Barba', nombre: 'Depilación', precio: 9000, activo: true });
+  let e = gas.getEstado();
+  assert(e.servicios.some(s => s.nombre === 'Uñas' && s.precio === 7000));
+  assert(!e.servicios.some(s => s.nombre === 'Corte'));
+  assert.strictEqual(e.ultimos[0].servicio, 'Corte', 'el historial conserva el nombre viejo');
+  gas.guardarCobro(cobro({ servicio: 'Uñas', monto: 7000 }));
+  assert.strictEqual(gas.getEstado().resumen.atenciones, 2);
+
+  assert.strictEqual(e.nombre, 'Control de caja diario');
+  const a = gas.adminNombreNegocio('1234', 'Nails Studio');
+  assert.strictEqual(a.nombreNegocio, 'Nails Studio');
+  assert.strictEqual(gas.getEstado().nombre, 'Nails Studio');
+  lanza(() => gas.adminNombreNegocio('1234', 'x'.repeat(41)), 'muy largo');
+  gas.adminNombreNegocio('1234', '');
+  assert.strictEqual(gas.getEstado().nombre, 'Control de caja diario');
+});
+
 prueba('cambiar un precio no modifica cobros anteriores', () => {
   const { gas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
   gas.guardarCobro(cobro());
@@ -189,7 +210,7 @@ prueba('rinde con un año de historial (110.000 cobros)', () => {
   const t = Date.now();
   gas.guardarCobro(cobro());
   const e = gas.getEstado();
-  assert.strictEqual(e.resumen.cortes, 1);
+  assert.strictEqual(e.resumen.atenciones, 1);
   assert(Date.now() - t < 2000, 'demasiado lento');
 });
 

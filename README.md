@@ -1,6 +1,6 @@
 # Control de caja diario
 
-**Sistema de cobros para barberías.** Web app para registrar los cobros de una barbería desde una tablet en la caja y cerrar el día sin cuentas a mano. Reemplaza la planilla de papel donde se anotan los pagos en efectivo y por transferencia.
+**Sistema de cobros para negocios de servicios:** barberías, peluquerías, uñas, estética, spa y otros rubros. Web app para registrar los cobros desde una tablet en la caja y cerrar el día sin cuentas a mano. Reemplaza la planilla de papel donde se anotan los pagos en efectivo y por transferencia.
 
 Funciona con **Google Apps Script + Google Sheets**: no necesita servidor ni base de datos, y no tiene costos de plataforma. Los datos quedan en una planilla de Google de la cuenta del local.
 
@@ -17,13 +17,14 @@ Funciona con **Google Apps Script + Google Sheets**: no necesita servidor ni bas
 - Después de guardar se desmarca todo, para que el próximo cobro arranque de cero.
 
 **Cierre del día**
-- Resumen general y por puesto: cortes, plata de servicios y propinas a entregar.
+- Resumen general y por puesto: atenciones, plata cobrada y propinas a entregar.
 - Botón **Cerrar día**: guarda el resumen y bloquea nuevas cargas. Al otro día la app arranca en cero.
 - **Cierre automático** a la hora configurada, por si nadie lo cierra. Además, al abrir la app se cierra el día anterior si quedó abierto.
 - **Reabrir día** con PIN, para cargar un cobro que quedó afuera. Al volver a cerrar se recalcula.
 - Navegación por días anteriores.
 
 **Administración (con PIN)**
+- **Polirubro:** nombre del negocio propio y servicios del rubro que sea (corte, uñas, depilación, masajes…).
 - Agregar puestos de trabajo y activar o desactivar los existentes (el historial no se pierde).
 - Agregar servicios, cambiar nombres y precios, o desactivarlos. Los cambios de precio no tocan los cobros ni los cierres anteriores.
 - Configurar la hora del cierre automático.
@@ -103,7 +104,7 @@ Requisitos: Node.js y [clasp](https://github.com/google/clasp) (`npm install -g 
 7. Volver a abrir la planilla y en el menú **Control de caja → Asignar PIN del cliente** cargar el PIN del dueño.
 8. **Implementar → Nueva implementación → Aplicación web.** Ejecutar como: *Yo*. Acceso: *Solo yo*.
 9. Abrir el link de la web app en la tablet (logueada con la cuenta del local) y agregarla a la pantalla de inicio.
-10. Entrar a Administración con el PIN y cargar los puestos, servicios y precios reales.
+10. Entrar a Administración con el PIN y cargar el nombre del negocio, los puestos, los servicios y los precios reales.
 
 Para actualizar el código después: `clasp push` y en el editor *Implementar → Gestionar implementaciones → Editar → Nueva versión*.
 

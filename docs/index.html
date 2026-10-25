@@ -250,7 +250,7 @@ function bannerDemo() {
 function renderCobro() {
   var e = S.estado, s = S.sel, r = e.resumen;
   var h = bannerDemo();
-  h += '<div class="barra"><div><div class="marca">Control de caja diario</div><h1>Cobros de hoy</h1><div class="sub">' + esc(fechaLarga(e.hoy)) + '</div></div>' +
+  h += '<div class="barra"><div><div class="marca">' + esc(e.nombre || 'Control de caja diario') + '</div><h1>Cobros de hoy</h1><div class="sub">' + esc(fechaLarga(e.hoy)) + '</div></div>' +
        '<div class="iconos">' +
        '<button class="icono" onclick="abrirPlanilla()" aria-label="Abrir planilla" title="Planilla">' + ICONO_PLANILLA + '</button>' +
        '<button class="icono" onclick="ir(\'admin\')" aria-label="Administración" title="Administración">' + ICONO_AJUSTES + '</button>' +
@@ -437,15 +437,15 @@ function renderCierre() {
        metrica('Total del día', r.total) + metrica('Propinas a entregar', r.propinas, true) + '</div>';
 
   h += '<div class="etiqueta">Por puesto de trabajo</div>';
-  var filas = r.porPuesto.filter(function (p) { return p.cortes > 0; });
+  var filas = r.porPuesto.filter(function (p) { return p.atenciones > 0; });
   if (!filas.length) {
     h += '<p class="gris">No hay cobros este día.</p>';
   } else {
-    h += '<table><tr><th>Puesto</th><th class="d">Cortes</th><th class="d">Servicios</th><th class="d">Propinas</th></tr>';
+    h += '<table><tr><th>Puesto</th><th class="d">Atenciones</th><th class="d">Cobrado</th><th class="d">Propinas</th></tr>';
     filas.forEach(function (p) {
-      h += '<tr><td>Puesto ' + p.puesto + '</td><td class="d num">' + p.cortes + '</td><td class="d num">' + plata(p.servicios) + '</td><td class="d num acento">' + plata(p.propinas) + '</td></tr>';
+      h += '<tr><td>Puesto ' + p.puesto + '</td><td class="d num">' + p.atenciones + '</td><td class="d num">' + plata(p.servicios) + '</td><td class="d num acento">' + plata(p.propinas) + '</td></tr>';
     });
-    h += '<tr><td><b>Total</b></td><td class="d num"><b>' + r.cortes + '</b></td><td class="d num"><b>' + plata(r.servicios) + '</b></td><td class="d num acento">' + plata(r.propinas) + '</td></tr></table>';
+    h += '<tr><td><b>Total</b></td><td class="d num"><b>' + r.atenciones + '</b></td><td class="d num"><b>' + plata(r.servicios) + '</b></td><td class="d num acento">' + plata(r.propinas) + '</td></tr></table>';
   }
 
   if (S.fechaCierre === hoy) {
@@ -514,6 +514,11 @@ function renderAdmin() {
   var a = S.admin;
   h += '<div id="msg" class="msg" style="margin-top:0"></div>';
 
+  // Nombre del negocio
+  h += '<div class="tarjeta seccion"><h2>Nombre del negocio</h2><p class="ayuda">Aparece arriba de la pantalla de cobro.</p><div class="linea">' +
+       '<input class="campo" id="nombreNegocio" maxlength="40" value="' + esc(a.nombreNegocio) + '" placeholder="Control de caja diario">' +
+       '<button class="btn prim" onclick="guardarNombre()">Guardar</button></div></div>';
+
   // Puestos
   h += '<div class="tarjeta seccion"><h2>Puestos de trabajo</h2><p class="ayuda">Los puestos apagados no aparecen al cobrar, pero su historial queda guardado.</p><div class="chips">';
   a.puestos.forEach(function (p) {
@@ -523,7 +528,7 @@ function renderAdmin() {
   h += '</div><button class="btn sec" style="max-width:260px" onclick="agregarPuesto()">+ Agregar puesto</button></div>';
 
   // Servicios
-  h += '<div class="tarjeta seccion"><h2>Servicios y precios</h2><p class="ayuda">Al cambiar un precio, los cobros y cierres anteriores no se modifican.</p>';
+  h += '<div class="tarjeta seccion"><h2>Servicios y precios</h2><p class="ayuda">Poné los servicios de tu rubro: cortes, uñas, depilación, masajes… Podés cambiar nombres y precios cuando quieras; los cobros y cierres anteriores no se modifican.</p>';
   a.servicios.forEach(function (sv, i) {
     h += '<div class="fila-serv">' +
          '<input class="campo" id="sn' + i + '" value="' + esc(sv.nombre) + '" maxlength="40" aria-label="Nombre">' +
@@ -532,7 +537,7 @@ function renderAdmin() {
          '<button class="btn sec" onclick="guardarServicio(' + i + ')">Guardar</button></div>';
   });
   h += '<div class="etiqueta">Nuevo servicio</div><div class="linea">' +
-       '<input class="campo" id="nuevoNombre" placeholder="Nombre, por ejemplo Cejas" maxlength="40">' +
+       '<input class="campo" id="nuevoNombre" placeholder="Nombre, por ejemplo Uñas" maxlength="40">' +
        '<input class="campo" id="nuevoPrecio" type="number" inputmode="numeric" min="0" step="1" placeholder="Precio" style="max-width:150px">' +
        '<button class="btn prim" onclick="agregarServicio()">Agregar</button></div></div>';
 
@@ -604,6 +609,9 @@ function agregarServicio() {
   if (!nombre || precio === '') { S.msg = { tipo: 'error', texto: 'Completá nombre y precio del servicio nuevo.' }; pintarMsg(); window.scrollTo(0, 0); return; }
   accionAdmin(api('adminGuardarServicio', S.pin, { original: '', nombre: nombre, precio: Number(precio), activo: true }), 'Servicio «' + nombre + '» agregado.');
 }
+function guardarNombre() {
+  accionAdmin(api('adminNombreNegocio', S.pin, $('nombreNegocio').value), 'Nombre del negocio guardado.');
+}
 function guardarHora() {
   accionAdmin(api('adminHoraCierre', S.pin, Number($('horaCierre').value)), 'Hora de cierre automático guardada.');
 }
@@ -645,7 +653,7 @@ function cerrarModal() { $('capa').innerHTML = ''; }
 var Demo = (function () {
   function hoyStr() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   var db = {
-    pin: '1234', horaCierre: 23,
+    pin: '1234', horaCierre: 23, nombre: 'Control de caja diario',
     puestos: [], servicios: [
       { nombre: 'Corte', precio: 8000, activo: true },
       { nombre: 'Barba', precio: 5000, activo: true },
@@ -680,13 +688,13 @@ var Demo = (function () {
 
   function resumen(fecha) {
     var cs = db.cobros.filter(function (c) { return c.fecha === fecha; });
-    var r = { cortes: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0, total: 0 };
+    var r = { atenciones: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0, total: 0 };
     var pp = {};
-    db.puestos.filter(function (p) { return p.activo; }).forEach(function (p) { pp[p.numero] = { puesto: p.numero, cortes: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0 }; });
+    db.puestos.filter(function (p) { return p.activo; }).forEach(function (p) { pp[p.numero] = { puesto: p.numero, atenciones: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0 }; });
     cs.forEach(function (c) {
-      var p = pp[c.puesto] || (pp[c.puesto] = { puesto: c.puesto, cortes: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0 });
-      p.cortes++; p.servicios += c.monto; p.propinas += c.propina;
-      r.cortes++; r.servicios += c.monto; r.propinas += c.propina;
+      var p = pp[c.puesto] || (pp[c.puesto] = { puesto: c.puesto, atenciones: 0, servicios: 0, propinas: 0, efectivo: 0, transferencias: 0 });
+      p.atenciones++; p.servicios += c.monto; p.propinas += c.propina;
+      r.atenciones++; r.servicios += c.monto; r.propinas += c.propina;
       if (c.medio === 'Efectivo') { r.efectivo += c.monto; p.efectivo += c.monto; } else { r.transferencias += c.monto; p.transferencias += c.monto; }
       if (c.propina) { if (c.medioPropina === 'Efectivo') { r.efectivo += c.propina; p.efectivo += c.propina; } else { r.transferencias += c.propina; p.transferencias += c.propina; } }
     });
@@ -695,14 +703,14 @@ var Demo = (function () {
     return r;
   }
   function checkPin(pin) { if (pin !== db.pin) throw new Error('PIN incorrecto.'); }
-  function config() { return { puestos: db.puestos, servicios: db.servicios, horaCierre: db.horaCierre }; }
+  function config() { return { puestos: db.puestos, servicios: db.servicios, horaCierre: db.horaCierre, nombreNegocio: db.nombre }; }
 
   var api = {
     getEstado: function () {
       var hoy = hoyStr();
       var cs = db.cobros.filter(function (c) { return c.fecha === hoy; });
       return {
-        hoy: hoy, cerrado: !!db.cerrados[hoy],
+        nombre: db.nombre, hoy: hoy, cerrado: !!db.cerrados[hoy],
         puestos: db.puestos.filter(function (p) { return p.activo; }).map(function (p) { return p.numero; }),
         servicios: db.servicios.filter(function (s) { return s.activo; }),
         resumen: resumen(hoy), ultimos: cs.slice(-5).reverse(), urlPlanilla: '#'
@@ -741,6 +749,7 @@ var Demo = (function () {
       else db.servicios.push({ nombre: nombre, precio: Math.round(d.precio), activo: true });
       return config();
     },
+    adminNombreNegocio: function (pin, n) { checkPin(pin); n = String(n || '').trim(); if (n.length > 40) throw new Error('El nombre es muy largo (máximo 40 letras).'); db.nombre = n || 'Control de caja diario'; return config(); },
     adminHoraCierre: function (pin, h) { checkPin(pin); db.horaCierre = h; return config(); }
   };
   return api;
