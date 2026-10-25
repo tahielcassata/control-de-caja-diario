@@ -406,10 +406,16 @@ function renderCobro() {
        '<button class="icono" onclick="abrirPlanilla()" aria-label="Abrir planilla" title="Planilla">' + ICONO_PLANILLA + '</button>' +
        '<button class="icono" onclick="ir(\'admin\')" aria-label="Administración" title="Administración">' + ICONO_AJUSTES + '</button>' +
        '</div></div>';
+  h += htmlLicencia(e.licencia);
   h += '<div id="conexion">' + htmlConexion() + '</div>';
 
+  var suspendido = e.licencia && e.licencia.estado === 'suspendido';
   h += '<div class="grilla"><div class="tarjeta">';
-  if (e.cerrado) {
+  if (suspendido) {
+    h += '<div class="banner" style="background:var(--error-fondo);color:var(--error)"><b>El sistema está suspendido por falta de pago.</b><br>' +
+         'Tus cobros y cierres siguen guardados: podés verlos en «Cierre del día» y en la planilla.' +
+         (e.licencia.contacto ? '<br>Para reactivarlo, comunicate con ' + esc(e.licencia.contacto) + '.' : '') + '</div>';
+  } else if (e.cerrado) {
     h += '<div class="banner aviso"><b>El día está cerrado.</b><br>Si quedó un cobro sin cargar, entrá a «Cierre del día» y reabrilo con el PIN.</div>';
   } else {
     h += '<div class="etiqueta">Puesto de trabajo</div><div class="opciones puestos">';
@@ -454,6 +460,13 @@ function renderCobro() {
     mostrarMedioPropina();
     pintarMsg();
   }
+}
+
+function htmlLicencia(l) {
+  if (!l || l.estado !== 'aviso') return '';
+  return '<div class="banner aviso" style="margin-bottom:16px"><b>Hay un pago pendiente del servicio.</b> ' +
+    (l.suspendeEl ? 'El sistema se suspende el ' + esc(fechaLarga(l.suspendeEl).toLowerCase()) + '. ' : '') +
+    (l.contacto ? 'Comunicate con ' + esc(l.contacto) + '.' : '') + '</div>';
 }
 
 function htmlTotales() {
@@ -953,7 +966,9 @@ var Demo = (function () {
     getEstado: function () {
       var hoy = hoyStr();
       var cs = db.cobros.filter(function (c) { return c.fecha === hoy; });
+      var lic = (location.search.match(/[?&]licencia=(aviso|suspendido)/) || [])[1] || 'activo';
       return {
+        licencia: { estado: lic, suspendeEl: lic === 'activo' ? null : sumarDias(hoy, 3), contacto: 'Tahiel · WhatsApp 11 5555-5555' },
         nombre: db.nombre, hoy: hoy, cerrado: !!db.cerrados[hoy],
         puestos: db.puestos.filter(function (p) { return p.activo; }).map(function (p) { return p.numero; }),
         servicios: db.servicios.filter(function (s) { return s.activo; }),

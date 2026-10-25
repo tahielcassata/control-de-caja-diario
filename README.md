@@ -39,6 +39,12 @@ Funciona con **Google Apps Script + Google Sheets**: no necesita servidor ni bas
 
 **Diseño adaptativo**: el mismo código se ve bien en tablet, celular y PC.
 
+**Licencias (control de pago del servicio)**
+- Un **panel propio del desarrollador** (carpeta `licencias/`, en su cuenta de Google) con una fila por cliente: código, clave, fecha de pago y días de gracia.
+- Cada sistema consulta su estado como mucho una vez por hora: **activo**, **aviso** (pago pendiente, muestra la fecha de suspensión) o **suspendido**.
+- Suspendido solo bloquea la carga de cobros nuevos. Los datos del cliente siguen disponibles en «Cierre del día» y en su planilla, y los cobros que quedaron pendientes sin internet se guardan igual.
+- Si el panel no responde, el sistema usa el último estado conocido y nunca se bloquea por un error. Sin configurar, el sistema anda normal.
+
 ## Arquitectura
 
 ```
@@ -71,6 +77,9 @@ src/
 test/
   simulador.js      simulador de Apps Script para correr el backend en Node
   test.js           pruebas del backend
+licencias/
+  Code.gs           panel de licencias del desarrollador (proyecto aparte)
+  appsscript.json
 docs/
   index.html        copia para la demo en GitHub Pages
 ```
@@ -83,7 +92,7 @@ El backend se prueba en Node con un simulador de las APIs de Google:
 npm test
 ```
 
-Cubre: carga y validación de cobros, cobros sin internet (duplicados, hora real, recálculo de cierres), propinas en distinto medio, deshacer, cierre manual y automático, reapertura con PIN, cambio de día, administración, bloqueo de PIN y rendimiento con un año de historial.
+Cubre: licencias (estados por fecha, fallos del panel, bloqueo), carga y validación de cobros, cobros sin internet (duplicados, hora real, recálculo de cierres), propinas en distinto medio, deshacer, cierre manual y automático, reapertura con PIN, cambio de día, administración, bloqueo de PIN y rendimiento con un año de historial.
 
 ## Instalación para un cliente
 
@@ -113,6 +122,23 @@ Requisitos: Node.js y [clasp](https://github.com/google/clasp) (`npm install -g 
 8. **Implementar → Nueva implementación → Aplicación web.** Ejecutar como: *Yo*. Acceso: *Solo yo*.
 9. Abrir el link de la web app en la tablet (logueada con la cuenta del local) y agregarla a la pantalla de inicio.
 10. Entrar a Administración con el PIN, cargar el nombre del negocio, ajustar los puestos y cargar los servicios (con la plantilla del rubro o uno por uno) con sus precios reales.
+
+### Panel de licencias (una sola vez, en tu cuenta)
+
+1. Crear el proyecto desde la carpeta `licencias`:
+   ```bash
+   cd licencias
+   clasp create --type sheets --title "Licencias - Control de caja diario"
+   git checkout -- appsscript.json
+   clasp push
+   ```
+2. En el editor ejecutar `setup` y, en la hoja **Config**, escribir tu contacto (por ejemplo, tu WhatsApp).
+3. **Implementar → Nueva implementación → Aplicación web.** Ejecutar como: *Yo*. Acceso: *Cualquier usuario*. Así los sistemas de los clientes pueden consultarla; sin el código y la clave de cada cliente solo responde "desconocido".
+4. Por cada cliente: menú **Licencias → Nuevo cliente** y copiar la **línea de instalación**.
+5. En la planilla del cliente: menú **Control de caja → Configurar licencia** y pegar esa línea.
+6. Cuando el cliente paga: seleccionar su fila y usar **Licencias → Registrar pago (+1 mes)**. Para suspender o reactivar a mano, cambiar la columna **Modo**.
+
+El acuerdo con el cliente (cuándo se suspende y qué incluye el servicio) tiene que estar por escrito antes de instalar.
 
 Para actualizar el código después: `clasp push` y en el editor *Implementar → Gestionar implementaciones → Editar → Nueva versión*.
 

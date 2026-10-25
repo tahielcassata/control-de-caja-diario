@@ -35,6 +35,7 @@ function crearEntorno(opciones = {}) {
     }
     setValue(x) { this.hoja.poner(this.fila, this.col, x); return this; }
     setNumberFormat() { return this; }
+    setDataValidation() { return this; }
     setFontWeight() { return this; }
   }
 
@@ -104,7 +105,8 @@ function crearEntorno(opciones = {}) {
       getActiveSpreadsheet: () => ss,
       flush() {},
       getUi: () => ({ createMenu: () => ({ addItem() { return this; }, addToUi() {} }) }),
-      ProtectionType: { SHEET: 'SHEET' }
+      ProtectionType: { SHEET: 'SHEET' },
+      newDataValidation: () => { const b = { requireValueInList: () => b, setAllowInvalid: () => b, build: () => ({}) }; return b; }
     },
     PropertiesService: {
       getScriptProperties: () => ({
@@ -143,10 +145,23 @@ function crearEntorno(opciones = {}) {
       Charset: { UTF_8: 'utf8' },
       computeDigest: (alg, texto) => [...crypto.createHash(alg).update(texto, 'utf8').digest()].map(b => (b > 127 ? b - 256 : b))
     },
-    HtmlService: {}
+    HtmlService: {},
+    UrlFetchApp: {
+      fetch: (url, opts) => {
+        if (!opciones.fetch) throw new Error('Sin conexión (simulado)');
+        const r = opciones.fetch(url, opts);
+        return { getResponseCode: () => r.codigo || 200, getContentText: () => (typeof r.cuerpo === 'string' ? r.cuerpo : JSON.stringify(r.cuerpo)) };
+      }
+    },
+    ContentService: {
+      MimeType: { JSON: 'json' },
+      createTextOutput: texto => ({ texto, setMimeType() { return this; } })
+    },
+    ScriptAppUrl: null
   };
+  contexto.ScriptApp.getService = () => ({ getUrl: () => 'https://script.google.com/macros/s/PANEL123/exec' });
   vm.createContext(contexto);
-  const codigo = fs.readFileSync(path.join(__dirname, '..', 'src', 'Code.gs'), 'utf8');
+  const codigo = fs.readFileSync(path.join(__dirname, '..', opciones.archivo || 'src/Code.gs'), 'utf8');
   vm.runInContext(codigo, contexto, { filename: 'Code.gs' });
 
   return {
@@ -154,7 +169,9 @@ function crearEntorno(opciones = {}) {
     hojas,
     props,
     triggers,
-    setAhora: d => { ahora = d; }
+    setAhora: d => { ahora = d; },
+    limpiarCache: () => cache.clear(),
+    opciones
   };
 }
 

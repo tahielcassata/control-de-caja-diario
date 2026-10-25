@@ -295,6 +295,111 @@ prueba('sin internet: guarda aunque el servicio se haya desactivado en el medio'
   assert.strictEqual(gas.getEstado().resumen.total, 15000);
 });
 
+// ───────────── Licencias ─────────────
+
+const LINEA = 'https://script.google.com/macros/s/PANEL123/exec|AB12CD|claveSecretaDeVeinteCaracteres';
+const respuesta = (estado, extra = {}) => () => ({ cuerpo: Object.assign({ estado, suspendeEl: null, contacto: 'Tahiel 11 5555-5555' }, extra) });
+
+prueba('licencias (panel): estado según la fecha de pago y los días de gracia', () => {
+  const { gas } = crearEntorno({ archivo: 'licencias/Code.gs' });
+  const L = (modo, pagado, gracia, hoy) => gas.calcularLicencia(modo, pagado, gracia, hoy);
+  assert.strictEqual(L('Automático', '', 5, '2026-11-10').estado, 'activo', 'sin fecha = activo');
+  assert.strictEqual(L('Automático', '2026-11-05', 5, '2026-11-05').estado, 'activo');
+  const aviso = L('Automático', '2026-11-05', 5, '2026-11-06');
+  assert.strictEqual(aviso.estado, 'aviso');
+  assert.strictEqual(aviso.suspendeEl, '2026-11-11');
+  assert.strictEqual(L('Automático', '2026-11-05', 5, '2026-11-10').estado, 'aviso');
+  assert.strictEqual(L('Automático', '2026-11-05', 5, '2026-11-11').estado, 'suspendido');
+  assert.strictEqual(L('Suspendido', '2027-01-01', 5, '2026-11-01').estado, 'suspendido', 'forzar suspensión');
+  assert.strictEqual(L('Activo', '2026-01-01', 5, '2026-11-01').estado, 'activo', 'forzar activo');
+  assert.strictEqual(gas.sumarMes('2026-11-05', '2026-11-01'), '2026-12-05');
+  assert.strictEqual(gas.sumarMes('2026-10-01', '2026-11-20'), '2026-12-20', 'vencido: desde hoy');
+  assert.strictEqual(gas.sumarMes('2027-01-31', '2027-01-10'), '2027-02-28', 'fin de mes');
+});
+
+prueba('licencias (panel): responde solo con código y clave correctos', () => {
+  const { gas, hojas } = crearEntorno({ archivo: 'licencias/Code.gs' });
+  gas.setup();
+  const { codigo, clave } = gas.altaCliente_('Barbería del Centro');
+  assert(/^[A-Z0-9]{6}$/.test(codigo) && clave.length === 24);
+  hojas.get('Config').datos[1][1] = 'Tahiel · WhatsApp 11 5555-5555';
+  const pedir = (c, k) => JSON.parse(gas.doGet({ parameter: { c, k } }).texto);
+  const r = pedir(codigo, clave);
+  assert.strictEqual(r.estado, 'activo');
+  assert.strictEqual(r.contacto, 'Tahiel · WhatsApp 11 5555-5555');
+  assert(hojas.get('Clientes').datos[1][6] instanceof Date, 'registra el último contacto');
+  assert.strictEqual(pedir(codigo, clave.slice(0, -1) + 'x').estado, 'desconocido', 'clave mal');
+  assert.strictEqual(pedir('ZZZZZZ', clave).estado, 'desconocido');
+  assert.strictEqual(pedir('', '').estado, 'desconocido');
+  hojas.get('Clientes').datos[1][3] = 'Suspendido';
+  assert.strictEqual(pedir(codigo, clave).estado, 'suspendido');
+  const otro = gas.altaCliente_('Nails Studio');
+  assert.notStrictEqual(otro.codigo, codigo);
+});
+
+prueba('licencia (cliente): sin configurar, el sistema anda normal', () => {
+  const { gas } = crearEntorno(); preparar(gas);
+  assert.strictEqual(gas.getEstado().licencia.estado, 'activo');
+  gas.guardarCobro(cobro());
+});
+
+prueba('licencia (cliente): aviso y suspensión', () => {
+  const env = crearEntorno(); const { gas } = env; preparar(gas);
+  lanza(() => gas.configurarLicencia_('cualquier cosa'), 'no es válida');
+  env.opciones.fetch = respuesta('aviso', { suspendeEl: '2026-10-25' });
+  gas.configurarLicencia_(LINEA);
+  let e = gas.getEstado();
+  assert.strictEqual(e.licencia.estado, 'aviso');
+  assert.strictEqual(e.licencia.suspendeEl, '2026-10-25');
+  gas.guardarCobro(cobro()); // con aviso se sigue cobrando
+
+  env.opciones.fetch = respuesta('suspendido');
+  env.limpiarCache();
+  lanza(() => gas.guardarCobro(cobro({ id: 'tablet-susp0001' })), 'suspendido');
+  // los datos siguen accesibles
+  assert.strictEqual(gas.getCierre('2026-10-21').resumen.total, 8000);
+  // un cobro que quedó pendiente sin internet de antes se guarda igual
+  env.setAhora(new Date('2026-10-21T16:00:00-03:00'));
+  gas.guardarCobro(cobro({ id: 'tablet-viejo002', cuando: '2026-10-21T15:10:00-03:00' }));
+  assert.strictEqual(gas.getEstado().resumen.atenciones, 2);
+
+  // reactivado
+  env.opciones.fetch = respuesta('activo');
+  env.limpiarCache();
+  gas.guardarCobro(cobro({ id: 'tablet-react001' }));
+});
+
+prueba('licencia (cliente): si el panel falla, usa el último estado y nunca bloquea por error', () => {
+  const env = crearEntorno(); const { gas } = env; preparar(gas);
+  env.opciones.fetch = null; // panel caído desde el principio
+  gas.configurarLicencia_(LINEA);
+  assert.strictEqual(gas.getEstado().licencia.estado, 'activo', 'nunca respondió: activo');
+  env.opciones.fetch = () => ({ codigo: 500, cuerpo: 'error' });
+  env.limpiarCache();
+  assert.strictEqual(gas.getEstado().licencia.estado, 'activo');
+  env.opciones.fetch = respuesta('desconocido');
+  env.limpiarCache();
+  assert.strictEqual(gas.getEstado().licencia.estado, 'activo', 'clave mal configurada no bloquea');
+  env.opciones.fetch = respuesta('aviso', { suspendeEl: '2026-10-30' });
+  env.limpiarCache();
+  assert.strictEqual(gas.getEstado().licencia.estado, 'aviso');
+  env.opciones.fetch = null; // se cae el panel
+  env.limpiarCache();
+  assert.strictEqual(gas.getEstado().licencia.estado, 'aviso', 'mantiene el último conocido');
+});
+
+prueba('licencia (cliente): consulta el panel como mucho una vez por hora', () => {
+  const env = crearEntorno(); const { gas } = env; preparar(gas);
+  let consultas = 0;
+  env.opciones.fetch = () => { consultas++; return respuesta('activo')(); };
+  gas.configurarLicencia_(LINEA);
+  for (let i = 0; i < 20; i++) gas.getEstado();
+  gas.guardarCobro(cobro());
+  assert.strictEqual(consultas, 1);
+  gas.configurarLicencia_(''); // quitar control
+  assert.strictEqual(gas.getEstado().licencia.estado, 'activo');
+});
+
 prueba('rinde con un año de historial (110.000 cobros)', () => {
   const env = crearEntorno(); const { gas, hojas } = env; preparar(gas);
   const hoja = hojas.get('Cobros');

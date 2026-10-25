@@ -34,6 +34,8 @@ var INTENTOS_POR_BLOQUEO = 5;
 var BLOQUEOS_PIN_MIN = [5, 60, 24 * 60];
 var NOMBRE_INICIAL = 'Control de caja diario';
 
+var LICENCIA_CACHE_SEG = 60 * 60; // consulta el panel de licencias como mucho una vez por hora
+
 /** Servicios típicos por rubro, para cargar de una vez desde Administración. Precios de ejemplo. */
 var RUBROS = {
   'Barbería': [['Corte', 8000], ['Barba', 5000], ['Corte y barba', 12000], ['Perfilado de cejas', 3000]],
@@ -58,6 +60,7 @@ function onOpen() {
     .createMenu('Control de caja')
     .addItem('Configurar sistema (primera vez)', 'setup')
     .addItem('Asignar PIN del cliente', 'asignarPinCliente')
+    .addItem('Configurar licencia', 'configurarLicencia')
     .addToUi();
 }
 
@@ -181,6 +184,7 @@ function getEstado() {
   var resumen = calcularResumen(cobros, puestos.filter(function (p) { return p.activo; }).map(function (p) { return p.numero; }));
   return {
     nombre: nombreNegocio_(),
+    licencia: licencia_(),
     hoy: hoy,
     cerrado: estaCerrado_(hoy),
     puestos: puestos.filter(function (p) { return p.activo; }).map(function (p) { return p.numero; }),
@@ -221,6 +225,11 @@ function guardarCobro(datos) {
         recalcular = true;
       }
       var diferido = ahora.getTime() - momento.getTime() > 2 * 60 * 1000;
+      // Con la licencia suspendida no se cargan cobros nuevos. Los que quedaron
+      // pendientes por falta de internet sí se guardan: ya ocurrieron.
+      if (!diferido && licencia_().estado === 'suspendido') {
+        throw new Error('El sistema está suspendido por falta de pago. Tus datos siguen guardados.');
+      }
       var cobro = validarCobro(datos, leerPuestos_(), leerServicios_(), diferido);
       getHoja_(HOJA_COBROS).appendRow([
         id || Utilities.getUuid(),
@@ -424,6 +433,81 @@ function reabrirDia(pin, fecha) {
     lock.releaseLock();
   }
   return getCierre(fecha);
+}
+
+// ───────────────────────── Licencia ─────────────────────────
+
+/**
+ * Lo usa el instalador desde la planilla: menú Control de caja → Configurar licencia.
+ * Se pega la "línea de instalación" que da el panel de licencias: URL|CÓDIGO|CLAVE.
+ * Vacío = sin control de licencia.
+ */
+function configurarLicencia() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.prompt('Configurar licencia', 'Pegá la línea de instalación del panel de licencias (o dejalo vacío para quitar el control).', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  try {
+    var lic = configurarLicencia_(r.getResponseText());
+    ui.alert(lic ? 'Licencia configurada. Estado actual: ' + lic.estado + '.' : 'Control de licencia quitado.');
+  } catch (e) {
+    ui.alert(e.message);
+  }
+}
+
+function configurarLicencia_(linea) {
+  var props = PropertiesService.getScriptProperties();
+  CacheService.getScriptCache().remove('LICENCIA');
+  linea = String(linea || '').trim();
+  if (!linea) {
+    ['LIC_URL', 'LIC_CODIGO', 'LIC_CLAVE', 'LIC_ULTIMA'].forEach(function (k) { props.deleteProperty(k); });
+    return null;
+  }
+  var partes = linea.split('|');
+  if (partes.length !== 3 || !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(partes[0]) || !/^[A-Z0-9]{4,12}$/.test(partes[1]) || partes[2].length < 16) {
+    throw new Error('La línea no es válida. Copiala completa desde el panel de licencias.');
+  }
+  props.setProperties({ LIC_URL: partes[0], LIC_CODIGO: partes[1], LIC_CLAVE: partes[2] });
+  props.deleteProperty('LIC_ULTIMA');
+  return licencia_();
+}
+
+/**
+ * Estado de la licencia: { estado: 'activo'|'aviso'|'suspendido', suspendeEl, contacto }.
+ * Consulta el panel como mucho una vez por hora. Si el panel no responde o no hay internet,
+ * usa el último estado conocido; si nunca respondió, el sistema sigue activo.
+ * Un problema del panel nunca le corta la caja al cliente.
+ */
+function licencia_() {
+  var props = PropertiesService.getScriptProperties();
+  var url = props.getProperty('LIC_URL');
+  if (!url) return { estado: 'activo', suspendeEl: null, contacto: '' };
+  var cache = CacheService.getScriptCache();
+  var enCache = cache.get('LICENCIA');
+  if (enCache) return JSON.parse(enCache);
+
+  var ultima = null;
+  try { ultima = JSON.parse(props.getProperty('LIC_ULTIMA') || 'null'); } catch (e) { ultima = null; }
+  var resultado = ultima || { estado: 'activo', suspendeEl: null, contacto: '' };
+  try {
+    var resp = UrlFetchApp.fetch(url + '?c=' + encodeURIComponent(props.getProperty('LIC_CODIGO')) + '&k=' + encodeURIComponent(props.getProperty('LIC_CLAVE')), {
+      muteHttpExceptions: true, followRedirects: true
+    });
+    if (resp.getResponseCode() === 200) {
+      var r = JSON.parse(resp.getContentText());
+      if (r && ['activo', 'aviso', 'suspendido'].indexOf(r.estado) !== -1) {
+        resultado = {
+          estado: r.estado,
+          suspendeEl: /^\d{4}-\d{2}-\d{2}$/.test(r.suspendeEl || '') ? r.suspendeEl : null,
+          contacto: String(r.contacto || '').slice(0, 120)
+        };
+        props.setProperty('LIC_ULTIMA', JSON.stringify(resultado));
+      }
+    }
+  } catch (e) {
+    // Sin respuesta del panel: queda el último estado conocido.
+  }
+  cache.put('LICENCIA', JSON.stringify(resultado), LICENCIA_CACHE_SEG);
+  return resultado;
 }
 
 // ───────────────────────── Lógica pura (testeable) ─────────────────────────
