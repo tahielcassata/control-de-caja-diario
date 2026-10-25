@@ -193,6 +193,23 @@ prueba('polirubro: renombrar servicios y nombre del negocio', () => {
   assert.strictEqual(gas.getEstado().nombre, 'Control de caja diario');
 });
 
+prueba('plantillas por rubro: cargan servicios sin duplicar', () => {
+  const { gas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
+  let a = gas.adminEntrar('1234');
+  assert(a.rubros.includes('Uñas') && a.rubros.includes('Barbería'));
+  a = gas.adminCargarRubro('1234', 'Uñas');
+  assert.strictEqual(a.agregados, 5);
+  assert(gas.getEstado().servicios.some(s => s.nombre === 'Manicura'));
+  a = gas.adminCargarRubro('1234', 'Uñas');
+  assert.strictEqual(a.agregados, 0, 'no duplica');
+  a = gas.adminCargarRubro('1234', 'Estética'); // comparte "Perfilado de cejas" con Barbería, no con Uñas
+  assert.strictEqual(a.agregados, 4);
+  a = gas.adminCargarRubro('1234', 'Barbería');
+  assert.strictEqual(a.agregados, 3, 'Perfilado de cejas ya existía');
+  lanza(() => gas.adminCargarRubro('1234', 'Inventado'), 'Rubro desconocido');
+  lanza(() => gas.adminCargarRubro('0000', 'Uñas'), 'PIN incorrecto');
+});
+
 prueba('cambiar un precio no modifica cobros anteriores', () => {
   const { gas } = crearEntorno(); preparar(gas);
   gas.guardarCobro(cobro());

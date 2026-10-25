@@ -4,7 +4,7 @@
 
 Funciona con **Google Apps Script + Google Sheets**: no necesita servidor ni base de datos, y no tiene costos de plataforma. Los datos quedan en una planilla de Google de la cuenta del local.
 
-> **Demo:** abrí `docs/index.html` en el navegador (o la versión publicada en GitHub Pages). Funciona en modo demostración con datos de ejemplo. PIN de administración: `1234`.
+> **Demo:** abrí `docs/index.html` en el navegador (o la versión publicada en GitHub Pages). Funciona en modo demostración con datos de ejemplo. PIN de administración: `1234`. Arriba se elige el rubro del ejemplo (también con `?rubro=Uñas`), y con `?vacio` se ve como recién instalado.
 
 ## Funciones
 
@@ -24,7 +24,7 @@ Funciona con **Google Apps Script + Google Sheets**: no necesita servidor ni bas
 - Navegación por días anteriores.
 
 **Administración (con PIN)**
-- **Polirubro:** nombre del negocio propio y servicios del rubro que sea (corte, uñas, depilación, masajes…).
+- **Polirubro:** nombre del negocio propio y servicios del rubro que sea. Arranca sin servicios y trae **plantillas** para cargar de una vez los típicos de Barbería, Peluquería, Uñas, Estética o Masajes y spa (con precios de ejemplo para ajustar).
 - Agregar puestos de trabajo y activar o desactivar los existentes (el historial no se pierde).
 - Agregar servicios, cambiar nombres y precios, o desactivarlos. Los cambios de precio no tocan los cobros ni los cierres anteriores.
 - Configurar la hora del cierre automático.
@@ -100,11 +100,11 @@ Requisitos: Node.js y [clasp](https://github.com/google/clasp) (`npm install -g 
    ```bash
    clasp push
    ```
-6. Abrir el editor (`clasp open`), elegir la función `setup` y ejecutarla. Autorizar los permisos. Crea las hojas, 10 puestos, servicios de ejemplo y el cierre automático.
+6. Abrir el editor (`clasp open`), elegir la función `setup` y ejecutarla. Autorizar los permisos. Crea las hojas, 10 puestos y el cierre automático. Arranca sin servicios.
 7. Volver a abrir la planilla y en el menú **Control de caja → Asignar PIN del cliente** cargar el PIN del dueño.
 8. **Implementar → Nueva implementación → Aplicación web.** Ejecutar como: *Yo*. Acceso: *Solo yo*.
 9. Abrir el link de la web app en la tablet (logueada con la cuenta del local) y agregarla a la pantalla de inicio.
-10. Entrar a Administración con el PIN y cargar el nombre del negocio, los puestos, los servicios y los precios reales.
+10. Entrar a Administración con el PIN, cargar el nombre del negocio, ajustar los puestos y cargar los servicios (con la plantilla del rubro o uno por uno) con sus precios reales.
 
 Para actualizar el código después: `clasp push` y en el editor *Implementar → Gestionar implementaciones → Editar → Nueva versión*.
 

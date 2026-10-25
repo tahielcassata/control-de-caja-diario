@@ -32,6 +32,15 @@ var BLOQUE_LECTURA = 2000;
 var MAX_INTENTOS_PIN = 5;
 var NOMBRE_INICIAL = 'Control de caja diario';
 
+/** Servicios típicos por rubro, para cargar de una vez desde Administración. Precios de ejemplo. */
+var RUBROS = {
+  'Barbería': [['Corte', 8000], ['Barba', 5000], ['Corte y barba', 12000], ['Perfilado de cejas', 3000]],
+  'Peluquería': [['Corte', 10000], ['Brushing', 8000], ['Color', 20000], ['Mechas', 30000], ['Alisado', 35000]],
+  'Uñas': [['Esmaltado semipermanente', 9000], ['Uñas esculpidas', 14000], ['Manicura', 6000], ['Pedicura', 8000], ['Retiro', 4000]],
+  'Estética': [['Limpieza facial', 15000], ['Depilación', 9000], ['Perfilado de cejas', 5000], ['Lifting de pestañas', 12000]],
+  'Masajes y spa': [['Masaje descontracturante', 18000], ['Masaje relajante', 16000], ['Drenaje linfático', 17000], ['Piedras calientes', 20000]]
+};
+
 // ───────────────────────── Web app ─────────────────────────
 
 function doGet() {
@@ -318,6 +327,26 @@ function adminHoraCierre(pin, hora) {
   return adminConfig_();
 }
 
+/**
+ * Carga los servicios típicos de un rubro. No toca los que ya existen
+ * (mismo nombre), así que se puede usar más de una vez o combinar rubros.
+ */
+function adminCargarRubro(pin, rubro) {
+  verificarPin_(pin);
+  var lista = RUBROS[rubro];
+  if (!lista) throw new Error('Rubro desconocido.');
+  var existentes = leerServicios_().map(function (s) { return s.nombre.toLowerCase(); });
+  var nuevos = lista.filter(function (s) { return existentes.indexOf(s[0].toLowerCase()) === -1; })
+    .map(function (s) { return [s[0], s[1], true]; });
+  if (nuevos.length) {
+    var hoja = getHoja_(HOJA_SERVICIOS);
+    hoja.getRange(hoja.getLastRow() + 1, 1, nuevos.length, 3).setValues(nuevos);
+  }
+  var config = adminConfig_();
+  config.agregados = nuevos.length;
+  return config;
+}
+
 /** Nombre que aparece arriba de la pantalla (por ejemplo, el nombre del local). */
 function adminNombreNegocio(pin, nombre) {
   verificarPin_(pin);
@@ -562,7 +591,8 @@ function adminConfig_() {
     puestos: leerPuestos_(),
     servicios: leerServicios_(),
     horaCierre: Number(props.getProperty('HORA_CIERRE') || HORA_CIERRE_INICIAL),
-    nombreNegocio: nombreNegocio_()
+    nombreNegocio: nombreNegocio_(),
+    rubros: Object.keys(RUBROS)
   };
 }
 

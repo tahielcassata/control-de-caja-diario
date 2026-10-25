@@ -243,8 +243,16 @@ function ir(vista) {
 }
 
 function bannerDemo() {
-  return MODO_DEMO ? '<div class="banner demo">Modo demostración: los datos son de ejemplo y no se guardan. PIN de administración: 1234.</div>' : '';
+  if (!MODO_DEMO) return '';
+  var h = '<div class="banner demo">Modo demostración: los datos son de ejemplo y no se guardan. PIN de administración: 1234.' +
+          '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span style="opacity:.8">Ver ejemplo de:</span>';
+  Object.keys(RUBROS_DEMO).forEach(function (r) {
+    var on = r === Demo.rubro;
+    h += '<button onclick="verRubro(\'' + r + '\')" style="border:1px solid ' + (on ? '#D9A441' : '#5A564F') + ';background:' + (on ? '#D9A441' : 'transparent') + ';color:' + (on ? '#1C1B19' : '#E7E2D9') + ';border-radius:999px;padding:4px 12px;font-size:14px">' + r + '</button>';
+  });
+  return h + '</div></div>';
 }
+function verRubro(r) { location.search = '?rubro=' + encodeURIComponent(r); }
 
 /* ═════════════════════ Pantalla de cobro ═════════════════════ */
 function renderCobro() {
@@ -536,6 +544,12 @@ function renderAdmin() {
          '<button class="switch' + (sv.activo ? ' on' : '') + '" id="sa' + i + '" data-on="' + sv.activo + '" aria-label="Activo" onclick="this.classList.toggle(\'on\');this.dataset.on=this.classList.contains(\'on\')"></button>' +
          '<button class="btn sec" onclick="guardarServicio(' + i + ')">Guardar</button></div>';
   });
+  if (!a.servicios.length) h += '<p class="gris" style="margin:0 0 4px">Todavía no hay servicios. Cargá los de un rubro o agregalos uno por uno.</p>';
+  h += '<div class="etiqueta">Cargar servicios típicos de un rubro (después ajustás los precios)</div><div class="chips">';
+  (a.rubros || []).forEach(function (r) {
+    h += '<button class="chip" style="cursor:pointer;padding:10px 16px" onclick="cargarRubro(\'' + esc(r).replace(/'/g, "\\'") + '\')">+ ' + esc(r) + '</button>';
+  });
+  h += '</div>';
   h += '<div class="etiqueta">Nuevo servicio</div><div class="linea">' +
        '<input class="campo" id="nuevoNombre" placeholder="Nombre, por ejemplo Uñas" maxlength="40">' +
        '<input class="campo" id="nuevoPrecio" type="number" inputmode="numeric" min="0" step="1" placeholder="Precio" style="max-width:150px">' +
@@ -609,6 +623,15 @@ function agregarServicio() {
   if (!nombre || precio === '') { S.msg = { tipo: 'error', texto: 'Completá nombre y precio del servicio nuevo.' }; pintarMsg(); window.scrollTo(0, 0); return; }
   accionAdmin(api('adminGuardarServicio', S.pin, { original: '', nombre: nombre, precio: Number(precio), activo: true }), 'Servicio «' + nombre + '» agregado.');
 }
+function cargarRubro(rubro) {
+  confirmar('¿Cargar servicios de ' + rubro + '?', 'Se agregan los servicios típicos con precios de ejemplo. Los que ya tenés no se tocan. Después revisá los precios.', 'Cargar', function () {
+    api('adminCargarRubro', S.pin, rubro).then(function (a) {
+      S.admin = a;
+      S.msg = { tipo: 'ok', texto: a.agregados ? 'Se agregaron ' + a.agregados + ' servicios de ' + rubro + '. Revisá los precios.' : 'Ya tenías todos los servicios de ' + rubro + '.' };
+      renderAdmin();
+    }).catch(function (e) { S.msg = { tipo: 'error', texto: errorTexto(e) }; pintarMsg(); });
+  });
+}
 function guardarNombre() {
   accionAdmin(api('adminNombreNegocio', S.pin, $('nombreNegocio').value), 'Nombre del negocio guardado.');
 }
@@ -650,16 +673,23 @@ function cerrarModal() { $('capa').innerHTML = ''; }
 /* ═════════════════════ Modo demostración ═════════════════════
  * Imita al servidor con datos en memoria. Solo se usa fuera de Apps Script.
  */
+/* Copia de RUBROS de Code.gs, solo para la demo. */
+var RUBROS_DEMO = {
+  'Barbería': [['Corte', 8000], ['Barba', 5000], ['Corte y barba', 12000], ['Perfilado de cejas', 3000]],
+  'Peluquería': [['Corte', 10000], ['Brushing', 8000], ['Color', 20000], ['Mechas', 30000], ['Alisado', 35000]],
+  'Uñas': [['Esmaltado semipermanente', 9000], ['Uñas esculpidas', 14000], ['Manicura', 6000], ['Pedicura', 8000], ['Retiro', 4000]],
+  'Estética': [['Limpieza facial', 15000], ['Depilación', 9000], ['Perfilado de cejas', 5000], ['Lifting de pestañas', 12000]],
+  'Masajes y spa': [['Masaje descontracturante', 18000], ['Masaje relajante', 16000], ['Drenaje linfático', 17000], ['Piedras calientes', 20000]]
+};
+var NOMBRES_DEMO = { 'Barbería': 'Barbería del Centro', 'Peluquería': 'Estilo Peluquería', 'Uñas': 'Nails Studio', 'Estética': 'Bella Estética', 'Masajes y spa': 'Zen Spa' };
+
 var Demo = (function () {
+  var rubro = decodeURIComponent((location.search.match(/[?&]rubro=([^&]+)/) || [])[1] || 'Barbería');
+  if (!RUBROS_DEMO[rubro]) rubro = 'Barbería';
   function hoyStr() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   var db = {
-    pin: '1234', horaCierre: 23, nombre: 'Control de caja diario',
-    puestos: [], servicios: [
-      { nombre: 'Corte', precio: 8000, activo: true },
-      { nombre: 'Barba', precio: 5000, activo: true },
-      { nombre: 'Corte y barba', precio: 12000, activo: true },
-      { nombre: 'Color', precio: 15000, activo: true }
-    ],
+    pin: '1234', horaCierre: 23, nombre: NOMBRES_DEMO[rubro],
+    puestos: [], servicios: RUBROS_DEMO[rubro].map(function (s) { return { nombre: s[0], precio: s[1], activo: true }; }),
     cobros: [], cerrados: {}
   };
   for (var i = 1; i <= 10; i++) db.puestos.push({ numero: i, activo: true });
@@ -667,14 +697,14 @@ var Demo = (function () {
   // Algunos cobros de ejemplo: hoy y los dos días anteriores
   // Con ?vacio en la dirección arranca como recién instalado: sin cobros ni servicios.
   (function sembrar() {
-    if (/[?&]vacio\b/.test(location.search)) { db.servicios = []; return; }
+    if (/[?&]vacio\b/.test(location.search)) { db.servicios = []; db.nombre = 'Control de caja diario'; return; }
     var semilla = 7;
     function azar(n) { semilla = (semilla * 9301 + 49297) % 233280; return Math.floor(semilla / 233280 * n); }
     [-2, -1, 0].forEach(function (dia) {
       var fecha = sumarDias(hoyStr(), dia);
       var cantidad = dia === 0 ? 9 : 60 + azar(40);
       for (var k = 0; k < cantidad; k++) {
-        var sv = db.servicios[azar(4)];
+        var sv = db.servicios[azar(db.servicios.length)];
         var prop = azar(4) === 0 ? (1 + azar(3)) * 500 : 0;
         db.cobros.push({
           id: 'demo-' + dia + '-' + k, fecha: fecha,
@@ -705,7 +735,7 @@ var Demo = (function () {
     return r;
   }
   function checkPin(pin) { if (pin !== db.pin) throw new Error('PIN incorrecto.'); }
-  function config() { return { puestos: db.puestos, servicios: db.servicios, horaCierre: db.horaCierre, nombreNegocio: db.nombre }; }
+  function config() { return { puestos: db.puestos, servicios: db.servicios, horaCierre: db.horaCierre, nombreNegocio: db.nombre, rubros: Object.keys(RUBROS_DEMO) }; }
 
   var api = {
     getEstado: function () {
@@ -752,8 +782,16 @@ var Demo = (function () {
       return config();
     },
     adminNombreNegocio: function (pin, n) { checkPin(pin); n = String(n || '').trim(); if (n.length > 40) throw new Error('El nombre es muy largo (máximo 40 letras).'); db.nombre = n || 'Control de caja diario'; return config(); },
+    adminCargarRubro: function (pin, r) {
+      checkPin(pin);
+      var ex = db.servicios.map(function (s) { return s.nombre.toLowerCase(); });
+      var nuevos = RUBROS_DEMO[r].filter(function (s) { return ex.indexOf(s[0].toLowerCase()) === -1; });
+      nuevos.forEach(function (s) { db.servicios.push({ nombre: s[0], precio: s[1], activo: true }); });
+      var c = config(); c.agregados = nuevos.length; return c;
+    },
     adminHoraCierre: function (pin, h) { checkPin(pin); db.horaCierre = h; return config(); }
   };
+  api.rubro = rubro;
   return api;
 })();
 
