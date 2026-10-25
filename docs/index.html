@@ -966,7 +966,7 @@ var Demo = (function () {
     getEstado: function () {
       var hoy = hoyStr();
       var cs = db.cobros.filter(function (c) { return c.fecha === hoy; });
-      var lic = (location.search.match(/[?&]licencia=(aviso|suspendido)/) || [])[1] || 'activo';
+      var lic = ((location.search + location.hash).match(/licencia[=-](aviso|suspendido)/) || [])[1] || 'activo';
       return {
         licencia: { estado: lic, suspendeEl: lic === 'activo' ? null : sumarDias(hoy, 3), contacto: 'Tahiel · WhatsApp 11 5555-5555' },
         nombre: db.nombre, hoy: hoy, cerrado: !!db.cerrados[hoy],
