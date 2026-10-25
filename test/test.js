@@ -14,6 +14,14 @@ function lanza(fn, texto) {
 }
 const cobro = (o = {}) => Object.assign({ puesto: 1, servicio: 'Corte', monto: 8000, medio: 'Efectivo', propina: 0, medioPropina: '' }, o);
 
+/** Instalación típica: setup, PIN asignado y servicios cargados desde Administración. */
+function preparar(gas) {
+  gas.setup();
+  gas.asignarPin_('1234');
+  [['Corte', 8000], ['Barba', 5000], ['Corte y barba', 12000], ['Color', 15000]].forEach(([nombre, precio]) =>
+    gas.adminGuardarServicio('1234', { original: '', nombre, precio, activo: true }));
+}
+
 console.log('\nSistema de cobros — pruebas\n');
 
 prueba('setup crea hojas, puestos, servicios y activador', () => {
@@ -22,7 +30,7 @@ prueba('setup crea hojas, puestos, servicios y activador', () => {
   ['Cobros', 'Cierres', 'Puestos', 'Servicios'].forEach(h => assert(hojas.has(h), 'falta ' + h));
   const e = gas.getEstado();
   assert.deepStrictEqual(e.puestos, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-  assert.strictEqual(e.servicios.length, 4);
+  assert.strictEqual(e.servicios.length, 0, 'arranca sin servicios');
   assert.strictEqual(triggers.length, 1);
   assert.strictEqual(e.hoy, '2026-10-21');
   gas.setup(); // repetir no duplica
@@ -31,7 +39,7 @@ prueba('setup crea hojas, puestos, servicios y activador', () => {
 });
 
 prueba('guardar cobros y calcular totales con propinas en distinto medio', () => {
-  const { gas } = crearEntorno(); gas.setup();
+  const { gas } = crearEntorno(); preparar(gas);
   gas.guardarCobro(cobro());
   gas.guardarCobro(cobro({ puesto: 2, servicio: 'Corte y barba', monto: 12000, medio: 'Transferencia', propina: 1000, medioPropina: 'Efectivo' }));
   const e = gas.guardarCobro(cobro({ puesto: 1, servicio: 'Barba', monto: 5000, medio: 'Transferencia', propina: 2000, medioPropina: 'Transferencia' }));
@@ -48,7 +56,7 @@ prueba('guardar cobros y calcular totales con propinas en distinto medio', () =>
 });
 
 prueba('validaciones del cobro', () => {
-  const { gas } = crearEntorno(); gas.setup();
+  const { gas } = crearEntorno(); preparar(gas);
   lanza(() => gas.guardarCobro(cobro({ puesto: 99 })), 'puesto');
   lanza(() => gas.guardarCobro(cobro({ servicio: 'Inventado' })), 'servicio');
   lanza(() => gas.guardarCobro(cobro({ monto: 0 })), 'monto');
@@ -58,7 +66,7 @@ prueba('validaciones del cobro', () => {
 });
 
 prueba('deshacer borra solo el último cobro de hoy', () => {
-  const { gas } = crearEntorno(); gas.setup();
+  const { gas } = crearEntorno(); preparar(gas);
   lanza(() => gas.deshacerUltimo(), 'No hay cobros');
   gas.guardarCobro(cobro());
   gas.guardarCobro(cobro({ puesto: 3, monto: 9000 }));
@@ -69,7 +77,7 @@ prueba('deshacer borra solo el último cobro de hoy', () => {
 });
 
 prueba('cerrar el día guarda el resumen y bloquea cargas y deshacer', () => {
-  const { gas, hojas } = crearEntorno(); gas.setup();
+  const { gas, hojas } = crearEntorno(); preparar(gas);
   gas.guardarCobro(cobro());
   gas.guardarCobro(cobro({ puesto: 2, propina: 500, medioPropina: 'Efectivo' }));
   const c = gas.cerrarDia();
@@ -86,7 +94,7 @@ prueba('cerrar el día guarda el resumen y bloquea cargas y deshacer', () => {
 });
 
 prueba('reabrir con PIN permite cargar un cobro tarde y recalcula al cerrar', () => {
-  const { gas, hojas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
+  const { gas, hojas } = crearEntorno(); preparar(gas);
   gas.guardarCobro(cobro());
   gas.cerrarDia();
   lanza(() => gas.reabrirDia('0000', '2026-10-21'), 'PIN incorrecto');
@@ -98,7 +106,7 @@ prueba('reabrir con PIN permite cargar un cobro tarde y recalcula al cerrar', ()
 });
 
 prueba('al día siguiente arranca en cero y el día anterior se cierra solo', () => {
-  const env = crearEntorno(); const { gas } = env; gas.setup();
+  const env = crearEntorno(); const { gas } = env; preparar(gas);
   gas.guardarCobro(cobro());
   env.setAhora(new Date('2026-10-22T10:00:00-03:00'));
   const e = gas.getEstado();
@@ -111,7 +119,7 @@ prueba('al día siguiente arranca en cero y el día anterior se cierra solo', ()
 });
 
 prueba('cierre automático por activador (también de madrugada)', () => {
-  const env = crearEntorno(); const { gas, props } = env; gas.setup();
+  const env = crearEntorno(); const { gas, props } = env; preparar(gas);
   gas.guardarCobro(cobro());
   env.setAhora(new Date('2026-10-21T23:30:00-03:00'));
   gas.cierreAutomatico();
@@ -131,7 +139,7 @@ prueba('sin PIN asignado no se puede entrar a administración', () => {
 });
 
 prueba('el instalador asigna y resetea el PIN del cliente', () => {
-  const { gas } = crearEntorno(); gas.setup();
+  const { gas } = crearEntorno(); preparar(gas);
   lanza(() => gas.asignarPin_('12'), 'entre 4 y 8');
   lanza(() => gas.asignarPin_('12ab'), 'entre 4 y 8');
   gas.asignarPin_('5739');
@@ -145,7 +153,7 @@ prueba('el instalador asigna y resetea el PIN del cliente', () => {
 });
 
 prueba('administración: puestos y servicios', () => {
-  const { gas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
+  const { gas } = crearEntorno(); preparar(gas);
   lanza(() => gas.adminEntrar('9999'), 'PIN incorrecto');
   let a = gas.adminEntrar('1234');
 
@@ -165,7 +173,7 @@ prueba('administración: puestos y servicios', () => {
 });
 
 prueba('polirubro: renombrar servicios y nombre del negocio', () => {
-  const { gas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
+  const { gas } = crearEntorno(); preparar(gas);
   gas.guardarCobro(cobro()); // un Corte de antes
   gas.adminGuardarServicio('1234', { original: 'Corte', nombre: 'Uñas', precio: 7000, activo: true });
   gas.adminGuardarServicio('1234', { original: 'Barba', nombre: 'Depilación', precio: 9000, activo: true });
@@ -186,20 +194,20 @@ prueba('polirubro: renombrar servicios y nombre del negocio', () => {
 });
 
 prueba('cambiar un precio no modifica cobros anteriores', () => {
-  const { gas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
+  const { gas } = crearEntorno(); preparar(gas);
   gas.guardarCobro(cobro());
   gas.adminGuardarServicio('1234', { original: 'Corte', nombre: 'Corte', precio: 10000, activo: true });
   assert.strictEqual(gas.getEstado().resumen.total, 8000);
 });
 
 prueba('bloqueo después de 5 PIN incorrectos', () => {
-  const { gas } = crearEntorno(); gas.setup(); gas.asignarPin_('1234');
+  const { gas } = crearEntorno(); preparar(gas);
   for (let i = 0; i < 5; i++) lanza(() => gas.adminEntrar('0000'), 'PIN incorrecto');
   lanza(() => gas.adminEntrar('1234'), 'Demasiados intentos');
 });
 
 prueba('rinde con un año de historial (110.000 cobros)', () => {
-  const env = crearEntorno(); const { gas, hojas } = env; gas.setup();
+  const env = crearEntorno(); const { gas, hojas } = env; preparar(gas);
   const hoja = hojas.get('Cobros');
   const fila = (fecha, i) => ['id' + i, fecha, '10:00', 1 + (i % 12), 'Corte', 8000, 'Efectivo', '', '', new Date()];
   let i = 0;

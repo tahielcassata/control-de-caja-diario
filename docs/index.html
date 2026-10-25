@@ -271,7 +271,7 @@ function renderCobro() {
     e.servicios.forEach(function (sv, i) {
       h += '<button class="op' + (s.servicio === sv.nombre ? ' on' : '') + '" onclick="elegirServicio(' + i + ')">' + esc(sv.nombre) + '<small>' + plata(sv.precio) + '</small></button>';
     });
-    if (!e.servicios.length) h += '<div class="gris">No hay servicios activos. Agregalos desde Administración.</div>';
+    if (!e.servicios.length) h += '<div class="banner aviso" style="grid-column:1/-1">Todavía no hay servicios cargados. Entrá a Administración (el engranaje de arriba) y agregá los de tu negocio.</div>';
     h += '</div>';
 
     h += '<div class="etiqueta">Monto</div><input id="monto" class="campo" type="number" inputmode="numeric" min="0" step="1" placeholder="Elegí un servicio" oninput="limpiarMsg()">';
@@ -665,9 +665,9 @@ var Demo = (function () {
   for (var i = 1; i <= 10; i++) db.puestos.push({ numero: i, activo: true });
 
   // Algunos cobros de ejemplo: hoy y los dos días anteriores
-  // Con ?vacio en la dirección arranca como recién instalado, sin cobros.
+  // Con ?vacio en la dirección arranca como recién instalado: sin cobros ni servicios.
   (function sembrar() {
-    if (/[?&]vacio\b/.test(location.search)) return;
+    if (/[?&]vacio\b/.test(location.search)) { db.servicios = []; return; }
     var semilla = 7;
     function azar(n) { semilla = (semilla * 9301 + 49297) % 233280; return Math.floor(semilla / 233280 * n); }
     [-2, -1, 0].forEach(function (dia) {

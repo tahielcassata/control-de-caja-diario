@@ -78,16 +78,9 @@ function setup() {
     puestos.getRange(2, 1, filas.length, 2).setValues(filas);
   }
 
+  // Arranca sin servicios: cada negocio carga los de su rubro desde Administración.
   var servicios = crearHoja_(ss, HOJA_SERVICIOS, COLS_SERVICIOS);
   servicios.getRange('B:B').setNumberFormat('$#,##0');
-  if (servicios.getLastRow() < 2) {
-    servicios.getRange(2, 1, 4, 3).setValues([
-      ['Corte', 8000, true],
-      ['Barba', 5000, true],
-      ['Corte y barba', 12000, true],
-      ['Color', 15000, true]
-    ]);
-  }
 
   if (!props.getProperty('HORA_CIERRE')) props.setProperty('HORA_CIERRE', String(HORA_CIERRE_INICIAL));
   instalarCierreAutomatico_(Number(props.getProperty('HORA_CIERRE')));
